@@ -1,0 +1,2 @@
+//arb sepolia pricefeed: 0xD1092a65338d049DB68D7Be6bD89d17a0929945e
+//zk mainnet pricefeed: 0xD1ce60dc8AE060DDD17cA8716C96f193bC88DD13
