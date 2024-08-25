@@ -21,8 +21,26 @@ By implementing this approach, we can optimize capital efficiency within decentr
 
 
 
+
+
+
+
+
+
+
 architecture:
-** The lockTokenCollateralVotingVault controls the emition of the stablecoin.
-** The lockTokenCollateralVotingVault creates individual smartAccounts that hold the collateral governance tokens in order to be able to delegate them correctly.
+
+
+
+
+- The lockTokenCollateralVotingVault controls the emition of the stablecoin.
+
+
+
+
+- The lockTokenCollateralVotingVault creates individual smartAccounts that hold the collateral governance tokens in order to be able to delegate them correctly.
+
+
+
 
 <img width="1007" alt="image" src="https://github.com/user-attachments/assets/95caf142-58c3-45f7-8b9c-aaec3524492e">
