@@ -5,7 +5,12 @@ Live frontEnd sample:
 https://66cb1518bab988fa3f397c7b--candid-sopapillas-8facc5.netlify.app/
 
 
+
+
+
 The problem this project aims to solve is the inefficiency in capital utilization within governance systems, particularly within decentralized finance (DeFi) ecosystems. This issue arises when individuals or entities hold governance tokens and wish to participate in DeFi activities, such as lending, borrowing, or trading, while also maintaining their voting power in governance processes.
+
+
 
 
 The issue of capital inefficiency in governance systems is a prevalent concern, particularly with respect to the utilization of governance tokens within DeFi ecosystems. The problem lies in the fact that delegating voting power simultaneously forfeits the ability to use these tokens for other purposes, resulting in an opportunity cost.
@@ -15,5 +20,9 @@ To address this challenge, we propose a solution that enables the minting of a s
 By implementing this approach, we can optimize capital efficiency within decentralized governance frameworks, fostering a more dynamic and robust ecosystem that benefits all stakeholders.
 
 
+
+architecture:
+** The lockTokenCollateralVotingVault controls the emition of the stablecoin.
+** The lockTokenCollateralVotingVault creates individual smartAccounts that hold the collateral governance tokens in order to be able to delegate them correctly.
 
 <img width="1007" alt="image" src="https://github.com/user-attachments/assets/95caf142-58c3-45f7-8b9c-aaec3524492e">
