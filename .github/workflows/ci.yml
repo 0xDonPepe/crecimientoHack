@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  contracts:
+    name: Contratos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - name: Formato
+        working-directory: contracts
+        run: forge fmt --check
+
+      - name: Build
+        working-directory: contracts
+        run: forge build --sizes
+
+      - name: Lint
+        working-directory: contracts
+        run: forge lint src/
+
+      - name: Tests
+        working-directory: contracts
+        run: forge test -vvv
+        env:
+          FOUNDRY_PROFILE: ci
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build
+        working-directory: frontend
+        run: |
+          npm install
+          npm run build

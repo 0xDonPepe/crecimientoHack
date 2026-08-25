@@ -1,0 +1,20 @@
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/*/dry-run/
+contracts/.gas-snapshot.tmp
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.log
+
+# Entorno: nunca commitear claves ni RPC privados
+.env
+.env.*
+!.env.example
+
+# Sistema
+.DS_Store
+Thumbs.db

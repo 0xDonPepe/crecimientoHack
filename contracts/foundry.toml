@@ -1,0 +1,29 @@
+[profile.default]
+src              = "src"
+out              = "out"
+libs             = ["lib"]
+solc             = "0.8.28"
+optimizer        = true
+optimizer_runs   = 200
+bytecode_hash    = "none"
+evm_version      = "cancun"
+gas_reports      = ["CollateralVotingVault", "DelegationAccount", "GovStablecoin"]
+
+[profile.default.fuzz]
+runs = 1024
+
+[profile.default.invariant]
+runs            = 256
+depth           = 64
+fail_on_revert  = false
+
+[profile.ci.fuzz]
+runs = 10000
+
+[rpc_endpoints]
+arbitrum         = "${ARBITRUM_RPC_URL}"
+arbitrum_sepolia = "${ARBITRUM_SEPOLIA_RPC_URL}"
+
+[etherscan]
+arbitrum         = { key = "${ARBISCAN_API_KEY}", chain = 42161 }
+arbitrum_sepolia = { key = "${ARBISCAN_API_KEY}", chain = 421614 }
