@@ -7,9 +7,9 @@ import {ERC20Votes} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Vo
 import {Nonces} from "@openzeppelin/contracts/utils/Nonces.sol";
 
 /// @title MockGovernanceToken
-/// @notice Token de gobernanza de prueba, equivalente a ARB o ZK.
-/// @dev Sustituye a los dos mockups de 1897 lineas de la v1, que eran
-///      OpenZeppelin v4 aplanado a mano dentro de un repo que declaraba v5.
+/// @notice Test governance token, standing in for ARB or ZK.
+/// @dev Replaces v1's two 1,897-line mockups, which were OpenZeppelin v4
+///      flattened by hand inside a repo whose manifest declared v5.
 contract MockGovernanceToken is ERC20, ERC20Permit, ERC20Votes {
     constructor(string memory name_, string memory symbol_) ERC20(name_, symbol_) ERC20Permit(name_) {}
 

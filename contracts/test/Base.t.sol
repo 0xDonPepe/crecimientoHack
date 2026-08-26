@@ -9,8 +9,8 @@ import {GovStablecoin} from "../src/GovStablecoin.sol";
 import {MockGovernanceToken} from "../src/mocks/MockGovernanceToken.sol";
 import {MockPriceFeed} from "../src/mocks/MockPriceFeed.sol";
 
-/// @notice Montaje comun a toda la suite.
-/// @dev Precio inicial de 0.60 USD con 8 decimales, como el feed real de ARB.
+/// @notice Shared fixture for the whole suite.
+/// @dev Starting price of 0.60 USD with 8 decimals, like the real ARB feed.
 abstract contract BaseTest is Test {
     uint256 internal constant BPS = 10_000;
     uint256 internal constant WAD = 1e18;
@@ -62,16 +62,16 @@ abstract contract BaseTest is Test {
             token.approve(address(vault), type(uint256).max);
         }
 
-        // El tiempo arranca en 1 en Foundry; se avanza para poder simular
-        // precios rancios sin que `block.timestamp - updatedAt` haga underflow.
+        // Foundry starts the clock at 1; move it forward so stale-price tests can
+        // rewind `updatedAt` without underflowing `block.timestamp - updatedAt`.
         vm.warp(1_700_000_000);
         feed.setAnswer(INITIAL_PRICE);
     }
 
-    /* --------------------------- utilidades --------------------------- */
+    /* ---------------------------- helpers ---------------------------- */
 
-    /// @dev Da `amount` de stablecoin a `to` abriendo una posicion sana de carol.
-    ///      Sirve para financiar a un liquidador sin romper la contabilidad.
+    /// @dev Gives `to` `amount` of stablecoin by opening a healthy position for
+    ///      carol. Funds a liquidator without breaking the accounting.
     function _fundStablecoin(address to, uint256 amount) internal {
         uint256 needed = (amount * WAD * BPS) / (vault.getPrice() * MAX_LTV) + 1e18;
         token.mint(carol, needed);
@@ -82,7 +82,7 @@ abstract contract BaseTest is Test {
         vm.stopPrank();
     }
 
-    /// @dev Valor en USD (18 dec) de `amount` tokens al precio actual del feed.
+    /// @dev USD value (18 dec) of `amount` tokens at the feed's current price.
     function _usd(uint256 amount) internal view returns (uint256) {
         return (amount * vault.getPrice()) / WAD;
     }

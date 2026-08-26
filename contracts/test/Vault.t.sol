@@ -7,10 +7,10 @@ import {DelegationAccount} from "../src/DelegationAccount.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Pausable} from "@openzeppelin/contracts/utils/Pausable.sol";
 
-/// @notice Mecanica completa del CDP: deposito, emision, repago, retiro,
-///         delegacion, administracion y pausa.
+/// @notice Full CDP mechanics: deposit, mint, repay, withdraw, delegation,
+///         administration and pausing.
 contract VaultTest is BaseTest {
-    /* ----------------------------- deposito ----------------------------- */
+    /* ------------------------------ deposit ----------------------------- */
 
     function test_DepositCreatesDeterministicAccount() public {
         address predicted = vault.predictAccountAddress(alice);
@@ -18,7 +18,7 @@ contract VaultTest is BaseTest {
         vm.prank(alice);
         vault.deposit(10e18);
 
-        assertEq(vault.accountOf(alice), predicted, "la direccion es predecible antes de existir");
+        assertEq(vault.accountOf(alice), predicted, "the address is predictable before it exists");
     }
 
     function test_SecondDepositReusesSameAccount() public {
@@ -28,7 +28,7 @@ contract VaultTest is BaseTest {
         vault.deposit(10e18);
         vm.stopPrank();
 
-        assertEq(vault.accountOf(alice), first, "no se despliega una cuenta nueva");
+        assertEq(vault.accountOf(alice), first, "no second account is deployed");
     }
 
     function test_OpenAccountBeforeDepositing() public {
@@ -63,10 +63,10 @@ contract VaultTest is BaseTest {
 
         assertEq(vault.totalCollateral(), 300e18);
         assertEq(vault.totalDebt(), 70e18);
-        assertEq(stable.totalSupply(), 70e18, "la oferta iguala a la deuda");
+        assertEq(stable.totalSupply(), 70e18, "supply equals debt");
     }
 
-    /* ------------------------------ emision ------------------------------ */
+    /* ------------------------------- mint ------------------------------- */
 
     function test_MintUpToExactLimit() public {
         vm.startPrank(alice);
@@ -105,13 +105,13 @@ contract VaultTest is BaseTest {
         vault.depositAndMint(100e18, 30e18);
         assertEq(vault.maxMintable(alice), 0);
 
-        feed.setAnswer(1.2e8); // el colateral duplica su valor
+        feed.setAnswer(1.2e8); // the collateral doubles in value
 
-        assertEq(vault.maxMintable(alice), 30e18, "ahora puede emitir mas");
+        assertEq(vault.maxMintable(alice), 30e18, "she can mint more now");
         assertEq(vault.healthFactor(alice), 3e18);
     }
 
-    /* ------------------------------- repago ------------------------------ */
+    /* ------------------------------- repay ------------------------------ */
 
     function test_RepayPartial() public {
         vm.startPrank(alice);
@@ -131,7 +131,7 @@ contract VaultTest is BaseTest {
         uint256 repaid = vault.repay(type(uint256).max);
         vm.stopPrank();
 
-        assertEq(repaid, 30e18, "se ajusta a la deuda real");
+        assertEq(repaid, 30e18, "clamped to the actual debt");
         assertEq(vault.debtOf(alice), 0);
         assertEq(stable.balanceOf(alice), 0);
     }
@@ -145,8 +145,8 @@ contract VaultTest is BaseTest {
         vm.prank(bob);
         vault.repayFor(alice, 30e18);
 
-        assertEq(vault.debtOf(alice), 0, "un tercero puede rescatar la posicion");
-        assertEq(vault.collateralOf(alice), 100e18, "sin tocar su colateral");
+        assertEq(vault.debtOf(alice), 0, "a third party can rescue the position");
+        assertEq(vault.collateralOf(alice), 100e18, "without touching her collateral");
     }
 
     function test_RepayRevertsWithoutDebt() public {
@@ -155,7 +155,7 @@ contract VaultTest is BaseTest {
         vault.repay(1e18);
     }
 
-    /* ------------------------------- retiro ------------------------------ */
+    /* ------------------------------ withdraw ---------------------------- */
 
     function test_WithdrawEverythingWhenDebtFree() public {
         vm.startPrank(alice);
@@ -170,7 +170,7 @@ contract VaultTest is BaseTest {
     function test_WithdrawPartialKeepingHealthy() public {
         vm.startPrank(alice);
         vault.depositAndMint(100e18, 15e18);
-        // 15 gUSD de deuda necesitan 50 tokens al 50% LTV; puede sacar 50.
+        // 15 gUSD of debt needs 50 tokens at 50% LTV; she can pull out 50.
         vault.withdraw(50e18);
         vm.stopPrank();
 
@@ -196,7 +196,7 @@ contract VaultTest is BaseTest {
         vault.withdraw(11e18);
     }
 
-    /* ----------------------------- delegacion ---------------------------- */
+    /* ----------------------------- delegation --------------------------- */
 
     function test_DelegateToThirdPartyWhileBorrowing() public {
         vm.prank(alice);
@@ -206,8 +206,8 @@ contract VaultTest is BaseTest {
         vault.delegate(bob);
 
         assertEq(vault.delegateOf(alice), bob);
-        assertEq(token.getVotes(bob), 100e18, "bob vota con el colateral de alice");
-        assertEq(vault.debtOf(alice), 30e18, "y alice conserva su deuda y su stablecoin");
+        assertEq(token.getVotes(bob), 100e18, "bob votes with alice's collateral");
+        assertEq(vault.debtOf(alice), 30e18, "and alice keeps her debt and her stablecoin");
         assertEq(stable.balanceOf(alice), 30e18);
     }
 
@@ -235,7 +235,7 @@ contract VaultTest is BaseTest {
         vault.withdraw(40e18);
         vm.stopPrank();
 
-        assertEq(token.getVotes(bob), 60e18, "el voto sigue al colateral que queda");
+        assertEq(token.getVotes(bob), 60e18, "the votes follow the remaining collateral");
     }
 
     function test_ImplementationCannotBeInitialized() public {
@@ -245,7 +245,7 @@ contract VaultTest is BaseTest {
         impl.initialize(address(this), alice, address(token));
     }
 
-    /* --------------------------- administracion -------------------------- */
+    /* --------------------------- administration ------------------------- */
 
     function test_OnlyOwnerSetsRiskParameters() public {
         vm.expectRevert(abi.encodeWithSelector(Ownable.OwnableUnauthorizedAccount.selector, alice));
@@ -285,7 +285,7 @@ contract VaultTest is BaseTest {
         vm.prank(owner);
         vault.transferOwnership(alice);
 
-        assertEq(vault.owner(), owner, "no cambia hasta que el destinatario acepta");
+        assertEq(vault.owner(), owner, "nothing changes until the recipient accepts");
 
         vm.prank(alice);
         vault.acceptOwnership();
@@ -293,7 +293,7 @@ contract VaultTest is BaseTest {
         assertEq(vault.owner(), alice);
     }
 
-    /* -------------------------------- pausa ------------------------------- */
+    /* -------------------------------- pause ------------------------------ */
 
     function test_PauseBlocksDepositAndMint() public {
         vm.prank(owner);
@@ -304,7 +304,7 @@ contract VaultTest is BaseTest {
         vault.deposit(1e18);
     }
 
-    /// @notice Pausar no puede secuestrar el colateral de nadie.
+    /// @notice Pausing must never hold anyone's collateral hostage.
     function test_PauseStillAllowsRepayAndWithdraw() public {
         vm.startPrank(alice);
         vault.depositAndMint(100e18, 30e18);
@@ -319,7 +319,7 @@ contract VaultTest is BaseTest {
         vault.withdraw(100e18);
         vm.stopPrank();
 
-        assertEq(token.balanceOf(alice), INITIAL_BALANCE, "siempre hay salida");
+        assertEq(token.balanceOf(alice), INITIAL_BALANCE, "there is always a way out");
     }
 
     function test_UnpauseRestoresDeposits() public {
@@ -334,9 +334,9 @@ contract VaultTest is BaseTest {
         assertEq(vault.collateralOf(alice), 1e18);
     }
 
-    /* -------------------------------- fuzz -------------------------------- */
+    /* -------------------------------- fuzz ------------------------------- */
 
-    /// @notice Cualquier ciclo completo devuelve exactamente el colateral.
+    /// @notice Any full round trip returns exactly the collateral put in.
     function testFuzz_RoundTripIsLossless(uint256 collateral, uint256 mintPct) public {
         collateral = bound(collateral, 1e15, INITIAL_BALANCE);
         mintPct = bound(mintPct, 0, 100);
@@ -354,15 +354,16 @@ contract VaultTest is BaseTest {
         vault.withdraw(collateral);
         vm.stopPrank();
 
-        assertEq(token.balanceOf(alice), balanceBefore, "el usuario recupera todo");
+        assertEq(token.balanceOf(alice), balanceBefore, "the user gets everything back");
         assertEq(vault.debtOf(alice), 0);
         assertEq(stable.totalSupply(), 0);
     }
 
-    /// @notice Emitir el maximo deja siempre la posicion justo en el LTV, sana.
+    /// @notice Minting the maximum always leaves the position exactly at the LTV
+    ///         and therefore healthy.
     function testFuzz_MaxMintLeavesPositionHealthy(uint256 collateral, uint64 rawPrice) public {
         collateral = bound(collateral, 1e18, INITIAL_BALANCE);
-        vm.assume(rawPrice > 1e6); // por encima de 0.01 USD
+        vm.assume(rawPrice > 1e6); // above 0.01 USD
         feed.setAnswer(int256(uint256(rawPrice)));
 
         vm.startPrank(alice);
@@ -372,11 +373,11 @@ contract VaultTest is BaseTest {
         vault.mint(toMint);
         vm.stopPrank();
 
-        assertFalse(vault.isLiquidatable(alice), "emitir el maximo nunca crea una posicion liquidable");
+        assertFalse(vault.isLiquidatable(alice), "minting the max never creates a liquidatable position");
         assertGe(vault.healthFactor(alice), WAD);
     }
 
-    /// @notice El poder de voto total del usuario es invariante al deposito.
+    /// @notice A user's total voting power is invariant to depositing.
     function testFuzz_VotingPowerPreserved(uint256 collateral) public {
         collateral = bound(collateral, 1e15, INITIAL_BALANCE);
 
@@ -387,6 +388,6 @@ contract VaultTest is BaseTest {
         vm.prank(alice);
         vault.deposit(collateral);
 
-        assertEq(token.getVotes(alice), votesBefore, "depositar jamas cuesta poder de voto");
+        assertEq(token.getVotes(alice), votesBefore, "depositing never costs voting power");
     }
 }

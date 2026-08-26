@@ -1,6 +1,6 @@
 # stableGov
 
-Emite una stablecoin contra tu token de gobernanza **sin renunciar a tu voto**.
+Mint a stablecoin against your governance token **without giving up your vote**.
 
 [![CI](https://github.com/0xDonPepe/crecimientoHack/actions/workflows/ci.yml/badge.svg)](https://github.com/0xDonPepe/crecimientoHack/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -8,125 +8,128 @@ Emite una stablecoin contra tu token de gobernanza **sin renunciar a tu voto**.
 
 ---
 
-## El problema
+## The problem
 
-Si tienes tokens de gobernanza (ARB, ZK, UNI…), tienes dos opciones y son
-excluyentes: los usas en DeFi como colateral, o los dejas quietos para votar.
-Depositarlos en un protocolo de préstamo normal significa que el poder de voto
-se va al protocolo, no a ti.
+If you hold governance tokens (ARB, ZK, UNI…) you have two options and they are
+mutually exclusive: use them in DeFi as collateral, or keep them idle so you can
+vote. Depositing them into a normal lending protocol means the voting power goes
+to the protocol, not to you.
 
-Ese coste de oportunidad hace que el capital de gobernanza se quede parado y que
-la participación en las DAOs baje.
+That opportunity cost leaves governance capital sitting still and pushes DAO
+participation down.
 
-## La solución
+## The solution
 
-Cuando depositas, el protocolo **no** guarda tu colateral en una bóveda común.
-Despliega una cuenta que es solo tuya, mete ahí tus tokens, y hace que esa cuenta
-delegue a quien tú digas.
+When you deposit, the protocol does **not** put your collateral in a shared
+vault. It deploys an account that belongs to you alone, moves your tokens into
+it, and has that account delegate to whoever you choose.
 
-Esto importa por un detalle de `ERC20Votes`: el poder de voto lo aporta la
-dirección que **sostiene** los tokens, y solo si esa dirección ha llamado
-`delegate()`. Una bóveda compartida mezcla el voto de todo el mundo o lo pierde;
-una cuenta por usuario lo mantiene separado y atribuible.
+This matters because of one detail in `ERC20Votes`: voting power is credited to
+the address that **holds** the tokens, and only if that address has called
+`delegate()`. A shared vault pools everyone's votes together or loses them
+outright; one account per user keeps them separate and attributable.
 
-Contra ese colateral emites `gUSD`, hasta el 50% de su valor. Tu voto no se mueve.
+Against that collateral you mint `gUSD`, up to 50% of its value. Your vote never
+moves.
 
 ```
                  ┌──────────────────────────┐
-   depositas     │  CollateralVotingVault   │   emite gUSD
-  ───────────────┤  · contabilidad          ├────────────────►  tu wallet
-                 │  · LTV y liquidaciones   │
-                 │  · precio (Chainlink)    │
+   you deposit   │  CollateralVotingVault   │   mints gUSD
+  ───────────────┤  · accounting            ├────────────────►  your wallet
+                 │  · LTV and liquidations  │
+                 │  · price (Chainlink)     │
                  └────────────┬─────────────┘
-                              │ clona (EIP-1167)
+                              │ clones (EIP-1167)
                               ▼
                  ┌──────────────────────────┐
-                 │  DelegationAccount       │   delega ──────►  tú, o quien
-                 │  (una por usuario)       │                   tú decidas
-                 │  custodia TU colateral   │
+                 │  DelegationAccount       │   delegates ───►  you, or
+                 │  (one per user)          │                   whoever you pick
+                 │  custodies YOUR tokens   │
                  └──────────────────────────┘
 ```
 
-## Estado del repo
+## Repo status
 
-> Este proyecto nació en el hackathon **Crecimiento** (agosto 2024), escrito en
-> un fin de semana. En agosto de 2026 se revisó a fondo y se reescribió por
-> completo.
+> This project started at the **Crecimiento** hackathon (August 2024), written
+> over a single weekend. In August 2026 it was reviewed in depth and rewritten
+> from scratch.
 >
-> La versión original se conserva intacta en la rama
+> The original version is preserved untouched on the
 > [`v1-hackathon`](https://github.com/0xDonPepe/crecimientoHack/tree/v1-hackathon)
-> y en el tag [`v1.0-hackathon`](https://github.com/0xDonPepe/crecimientoHack/releases/tag/v1.0-hackathon).
+> branch and the [`v1.0-hackathon`](https://github.com/0xDonPepe/crecimientoHack/releases/tag/v1.0-hackathon)
+> tag.
 >
-> **El [CHANGELOG](CHANGELOG.md) documenta los 10 bugs que tenía la v1** —
-> incluidos tres que impedían que la idea funcionara— y todo lo que se añadió.
-> Cada bug tiene su test de regresión en
+> **The [CHANGELOG](CHANGELOG.md) documents the 10 bugs v1 had** — including
+> three that kept the idea from working at all — and everything that was added.
+> Each bug has its own regression test in
 > [`V1Regression.t.sol`](contracts/test/V1Regression.t.sol).
 
-⚠️ **Sin auditar.** Es un proyecto de aprendizaje. No lo uses con dinero real.
+⚠️ **Unaudited.** This is a learning project. Do not use it with real money.
 
-## Cómo funciona
+## How it works
 
-| Parámetro | Valor | Qué significa |
+| Parameter | Value | What it means |
 |---|---|---|
-| LTV máximo | 50% | Lo más que puedes emitir contra tu colateral |
-| Umbral de liquidación | 75% | A partir de aquí tu posición es liquidable |
-| Bono de liquidación | 10% | Descuento que se lleva quien te liquida |
-| Close factor | 50% | Máximo de tu deuda cubrible en una liquidación |
-| Antigüedad máx. del precio | 1 hora | Más viejo que esto y el protocolo se bloquea |
+| Max LTV | 50% | The most you can mint against your collateral |
+| Liquidation threshold | 75% | Past this, your position can be liquidated |
+| Liquidation bonus | 10% | Discount the liquidator receives |
+| Close factor | 50% | Most of your debt coverable in one liquidation |
+| Max price age | 1 hour | Staler than this and the protocol blocks |
 
-El **health factor** resume tu posición: `valor del colateral × 0.75 / deuda`.
-Por debajo de `1.0` eres liquidable. Emitir el máximo te deja en `1.5`.
+The **health factor** summarizes your position:
+`collateral value × 0.75 / debt`. Below `1.0` you are liquidatable. Minting the
+maximum leaves you at `1.5`.
 
-### Ciclo completo
+### Full cycle
 
 ```solidity
 token.approve(address(vault), amount);
 vault.depositAndMint(100e18, 30e18);   // 100 MGOV → 30 gUSD
 
-vault.delegate(miDelegadoFavorito);    // el voto se mueve, la deuda no
+vault.delegate(myFavoriteDelegate);    // votes move, debt does not
 
 stablecoin.approve(address(vault), type(uint256).max);
-vault.repayAndWithdraw(30e18, 100e18); // recuperas todo tu colateral
+vault.repayAndWithdraw(30e18, 100e18); // you get all your collateral back
 ```
 
-## Estructura
+## Layout
 
 ```
 contracts/                    Foundry
   src/
-    CollateralVotingVault.sol   el CDP: depósito, emisión, repago, liquidación
-    DelegationAccount.sol       bóveda por usuario que custodia y delega
-    GovStablecoin.sol           ERC20 que solo el vault emite y quema
+    CollateralVotingVault.sol   the CDP: deposit, mint, repay, liquidate
+    DelegationAccount.sol       per-user vault that custodies and delegates
+    GovStablecoin.sol           ERC20 only the vault can mint and burn
     interfaces/                 IAggregatorV3 (Chainlink)
-    mocks/                      token de gobernanza y feed para pruebas
+    mocks/                      governance token and price feed for tests
   test/
-    V1Regression.t.sol          un test por cada bug de la v1
-    Vault.t.sol                 mecánica del CDP
-    Liquidation.t.sol           liquidaciones y fuzzing
-    Oracle.t.sol                validación del oráculo
-    Invariant.t.sol             invariantes contables
-  script/Deploy.s.sol         despliegue parametrizado por entorno
-  export-abis.sh              genera los ABIs del frontend
+    V1Regression.t.sol          one test per v1 bug
+    Vault.t.sol                 CDP mechanics
+    Liquidation.t.sol           liquidations and fuzzing
+    Oracle.t.sol                oracle validation
+    Invariant.t.sol             accounting invariants
+  script/Deploy.s.sol         deployment parameterized by environment
+  export-abis.sh              generates the frontend ABIs
 
 frontend/                     React 18 + Vite + ethers v6
   src/hooks/                    useWallet, useVault
-  src/components/Panels.jsx     paneles de la dApp
-  src/lib/errors.js             decodifica custom errors a español
-  src/abi/                      generados, no editar a mano
+  src/components/Panels.jsx     the dApp's panels
+  src/lib/errors.js             decodes custom errors into plain English
+  src/abi/                      generated, do not edit by hand
 ```
 
-## Correr el proyecto
+## Running it
 
-### Contratos
+### Contracts
 
-Necesitas [Foundry](https://book.getfoundry.sh/getting-started/installation).
+You need [Foundry](https://book.getfoundry.sh/getting-started/installation).
 
 ```bash
 cd contracts
-forge install          # instala forge-std y OpenZeppelin v5
+forge install          # installs forge-std and OpenZeppelin v5
 forge build
 forge test             # 83 tests
-forge test -vvv        # con trazas
+forge test -vvv        # with traces
 forge coverage
 ```
 
@@ -134,14 +137,14 @@ forge coverage
 
 ```bash
 cd frontend
-cp .env.example .env   # pon aquí las direcciones desplegadas
+cp .env.example .env   # put your deployed addresses here
 npm install
 npm run dev
 ```
 
-### Desplegar
+### Deploying
 
-En una red con feed de Chainlink del token:
+On a network with a Chainlink feed for the token:
 
 ```bash
 cd contracts
@@ -151,63 +154,61 @@ export VAULT_OWNER=0x...
 forge script script/Deploy.s.sol:Deploy --rpc-url arbitrum --broadcast --verify
 ```
 
-En testnet, desplegando también un token y un feed de prueba:
+On a testnet, deploying a mock token and feed as well:
 
 ```bash
 forge script script/Deploy.s.sol:DeployTestnet --rpc-url arbitrum_sepolia --broadcast
 ```
 
-Después, regenera los ABIs del frontend:
+Afterwards, regenerate the frontend ABIs:
 
 ```bash
 ./export-abis.sh
 ```
 
-## Decisiones de diseño
+## Design decisions
 
-**Una cuenta por usuario, no una bóveda compartida.** Es lo que permite que el
-voto siga siendo tuyo. Se despliega como clon EIP-1167 para que abrir posición
-cueste poco gas, y con CREATE2 para que la dirección se pueda calcular antes de
-existir.
+**One account per user, not a shared vault.** This is what keeps the votes
+yours. It is deployed as an EIP-1167 clone so opening a position stays cheap,
+and with CREATE2 so the address can be computed before it exists.
 
-**Pausar no bloquea la salida.** `pause()` congela depósito, emisión y
-liquidación, pero `repay` y `withdraw` siguen abiertos. Un botón de pánico no
-debería poder secuestrar el colateral de nadie.
+**Pausing does not block the exit.** `pause()` freezes deposits, minting and
+liquidations, but `repay` and `withdraw` stay open. A panic button should never
+be able to hold anyone's collateral hostage.
 
-**Repagar funciona con el oráculo caído.** Solo las operaciones que necesitan
-valorar la posición dependen del precio. Si el feed muere, todo el mundo puede
-seguir cerrando su posición.
+**Repaying works with the oracle down.** Only operations that need to value the
+position depend on the price. If the feed dies, everyone can still close out.
 
-**Las posiciones insolventes se vacían en vez de revertir.** Si el colateral ya
-no cubre ni la deuda cubierta más el bono, el liquidador se lleva lo que queda y
-el resto se reconoce como deuda mala. Sin ese tope, una posición mala quedaría
-imposible de cerrar para siempre.
+**Insolvent positions get drained rather than reverting.** Once the collateral
+no longer covers even the covered debt plus bonus, the liquidator takes what is
+left and the remainder is recognized as bad debt. Without that cap, a bad
+position would be impossible to close forever.
 
-**Frontera de rescate.** Liquidar solo mejora el health factor si
-`HF > umbral × (1 + bono)` = 0.825. Por debajo, cada liquidación hunde más la
-posición. Lo encontró el fuzzer; está derivado y probado en
+**Salvage boundary.** Liquidating only improves the health factor while
+`HF > threshold × (1 + bonus)` = 0.825. Below that, each liquidation sinks the
+position further. The fuzzer found this; it is derived and tested in
 [`Liquidation.t.sol`](contracts/test/Liquidation.t.sol).
 
-## Qué falta
+## What's missing
 
-Cosas conscientemente fuera de alcance, en orden de importancia:
+Deliberately out of scope, in order of importance:
 
-- **Tasa de estabilidad.** Hoy la deuda no devenga interés, así que no hay
-  incentivo económico para cerrar posiciones ni ingresos para el protocolo.
-- **Mecanismo de peg.** `gUSD` es un token de deuda sobrecolateralizada, no una
-  stablecoin con anclaje. Sin redención directa ni módulo de estabilidad, su
-  precio de mercado puede desviarse del dólar.
-- **Oráculo de un solo feed.** Sin fuente de respaldo ni TWAP.
-- **Auditoría.**
-- Delegación parcial a varios delegatees, y soporte de `delegateBySig`.
+- **Stability fee.** Debt accrues no interest today, so there is no economic
+  pressure to close positions and no revenue for the protocol.
+- **Peg mechanism.** `gUSD` is an overcollateralized debt token, not a pegged
+  stablecoin. With no direct redemption or stability module, its market price
+  can drift from the dollar.
+- **Single-feed oracle.** No fallback source, no TWAP.
+- **An audit.**
+- Partial delegation across several delegatees, and `delegateBySig` support.
 
-## Créditos
+## Credits
 
-Hecho por [0xDonPepe](https://github.com/0xDonPepe) para el hackathon Crecimiento.
+Built by [0xDonPepe](https://github.com/0xDonPepe) for the Crecimiento hackathon.
 
-- [Video de la demo original (2024)](https://youtu.be/4a0A2Ecvg9w)
-- [Código de la v1](https://github.com/0xDonPepe/crecimientoHack/tree/v1-hackathon)
+- [Original demo video (2024)](https://youtu.be/4a0A2Ecvg9w)
+- [v1 source](https://github.com/0xDonPepe/crecimientoHack/tree/v1-hackathon)
 
-## Licencia
+## License
 
 [MIT](LICENSE)

@@ -20,8 +20,8 @@ export default function App() {
         <div>
           <h1>stableGov</h1>
           <p className="tagline">
-            Emite una stablecoin contra tu token de gobernanza sin renunciar a
-            tu voto.
+            Mint a stablecoin against your governance token without giving up
+            your vote.
           </p>
         </div>
         {wallet.address ? (
@@ -30,7 +30,7 @@ export default function App() {
           </span>
         ) : (
           <button onClick={wallet.connect} disabled={wallet.connecting}>
-            {wallet.connecting ? "Conectando..." : "Conectar wallet"}
+            {wallet.connecting ? "Connecting..." : "Connect wallet"}
           </button>
         )}
       </header>
@@ -38,25 +38,23 @@ export default function App() {
       <main>
         {!wallet.hasWallet && (
           <Banner kind="error">
-            No se detecto ninguna wallet en el navegador. Instala MetaMask para
-            usar la aplicacion.
+            No wallet detected in this browser. Install MetaMask to use the app.
           </Banner>
         )}
 
         {!isConfigured() && (
           <Banner kind="error">
-            Faltan las direcciones de los contratos. Copia{" "}
-            <code>.env.example</code> a <code>.env</code> y rellena{" "}
-            <code>VITE_VAULT_ADDRESS</code> y{" "}
+            Contract addresses are missing. Copy <code>.env.example</code> to{" "}
+            <code>.env</code> and fill in <code>VITE_VAULT_ADDRESS</code> and{" "}
             <code>VITE_COLLATERAL_ADDRESS</code>.
           </Banner>
         )}
 
         {wallet.wrongNetwork && (
           <Banner kind="warn">
-            Estas en la red equivocada. Esta dApp corre en {CHAIN_NAME}.{" "}
+            You are on the wrong network. This dApp runs on {CHAIN_NAME}.{" "}
             <button className="link" onClick={wallet.switchNetwork}>
-              Cambiar de red
+              Switch network
             </button>
           </Banner>
         )}
@@ -95,21 +93,23 @@ export default function App() {
           </>
         ) : (
           <section className="card">
-            <h2>Como funciona</h2>
+            <h2>How it works</h2>
             <ol className="how">
-              <li>Depositas tu token de gobernanza como colateral.</li>
+              <li>You deposit your governance token as collateral.</li>
               <li>
-                El protocolo lo guarda en una cuenta que es solo tuya y la hace
-                delegar a quien tu digas, asi que tu voto no se mueve.
+                The protocol keeps it in an account that is yours alone and has
+                it delegate to whoever you choose, so your votes never move.
               </li>
-              <li>Emites gUSD contra ese colateral, hasta el 50% de su valor.</li>
               <li>
-                Cuando quieras, repagas y recuperas todo tu colateral. Si el
-                precio cae y tu health factor baja de 1, tu posicion se puede
-                liquidar.
+                You mint gUSD against that collateral, up to 50% of its value.
+              </li>
+              <li>
+                Whenever you want, you repay and get all your collateral back.
+                If the price falls and your health factor drops below 1, your
+                position can be liquidated.
               </li>
             </ol>
-            <p className="muted">Conecta tu wallet para empezar.</p>
+            <p className="muted">Connect your wallet to get started.</p>
           </section>
         )}
       </main>
@@ -120,7 +120,7 @@ export default function App() {
           target="_blank"
           rel="noreferrer"
         >
-          Codigo en GitHub
+          Source on GitHub
         </a>
         <span>
           {" · "}
@@ -129,7 +129,7 @@ export default function App() {
             target="_blank"
             rel="noreferrer"
           >
-            Ver la v1 del hackathon
+            See the v1 hackathon build
           </a>
         </span>
       </footer>
@@ -143,7 +143,7 @@ function Banner({ kind, children, onClose }) {
       <span>{children}</span>
       {onClose && (
         <button className="link" onClick={onClose}>
-          cerrar
+          dismiss
         </button>
       )}
     </div>

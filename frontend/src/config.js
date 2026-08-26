@@ -1,6 +1,6 @@
-// Configuracion de red y direcciones, leida del entorno.
-// En la v1 cada componente traia su propia direccion cableada en el codigo,
-// asi que cambiar de red significaba editar y recompilar el frontend.
+// Network and address configuration, read from the environment.
+// In v1 every component carried its own hardcoded address, so switching
+// networks meant editing and rebuilding the frontend.
 
 export const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 421614);
 export const CHAIN_NAME = import.meta.env.VITE_CHAIN_NAME ?? "Arbitrum Sepolia";

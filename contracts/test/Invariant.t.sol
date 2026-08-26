@@ -12,7 +12,7 @@ import {GovStablecoin} from "../src/GovStablecoin.sol";
 import {MockGovernanceToken} from "../src/mocks/MockGovernanceToken.sol";
 import {MockPriceFeed} from "../src/mocks/MockPriceFeed.sol";
 
-/// @notice Conductor que golpea el vault con secuencias aleatorias de acciones.
+/// @notice Handler that hits the vault with random sequences of actions.
 contract Handler is CommonBase, StdCheats, StdUtils {
     CollateralVotingVault public immutable vault;
     MockGovernanceToken public immutable token;
@@ -80,7 +80,7 @@ contract Handler is CommonBase, StdCheats, StdUtils {
     function withdraw(uint256 seed, uint256 amount) external useActor(seed) {
         amount = bound(amount, 0, vault.collateralOf(currentActor));
         if (amount == 0) return;
-        // Solo se intenta lo que deja la posicion sana; el resto revertiria.
+        // Only attempts what keeps the position healthy; the rest would revert.
         try vault.withdraw(amount) {
             ghostWithdrawn += amount;
         } catch {}
@@ -104,13 +104,13 @@ contract Handler is CommonBase, StdCheats, StdUtils {
         } catch {}
     }
 
-    /// @dev Mueve el precio dentro de un rango amplio pero siempre positivo.
+    /// @dev Moves the price across a wide range, always staying positive.
     function movePrice(uint256 newPrice) external {
         feed.setAnswer(int256(bound(newPrice, 0.01e8, 10e8)));
     }
 }
 
-/// @notice Invariantes contables del protocolo.
+/// @notice Accounting invariants of the protocol.
 contract InvariantTest is Test {
     MockGovernanceToken internal token;
     MockPriceFeed internal feed;
@@ -139,12 +139,12 @@ contract InvariantTest is Test {
         targetContract(address(handler));
     }
 
-    /// @notice Cada gUSD en circulacion corresponde a deuda registrada.
+    /// @notice Every gUSD in circulation corresponds to recorded debt.
     function invariant_SupplyEqualsTotalDebt() public view {
         assertEq(stable.totalSupply(), vault.totalDebt());
     }
 
-    /// @notice El acumulado por usuario cuadra con el total.
+    /// @notice Per-user collateral adds up to the total.
     function invariant_CollateralAccountingMatches() public view {
         uint256 sum;
         uint256 n = handler.actorsLength();
@@ -154,7 +154,7 @@ contract InvariantTest is Test {
         assertEq(sum, vault.totalCollateral());
     }
 
-    /// @notice La deuda por usuario cuadra con el total.
+    /// @notice Per-user debt adds up to the total.
     function invariant_DebtAccountingMatches() public view {
         uint256 sum;
         uint256 n = handler.actorsLength();
@@ -164,8 +164,8 @@ contract InvariantTest is Test {
         assertEq(sum, vault.totalDebt());
     }
 
-    /// @notice El colateral registrado esta realmente en la cuenta del usuario.
-    ///         Este es el invariante que la v1 violaba de forma sistematica.
+    /// @notice Recorded collateral really sits in the user's account.
+    ///         This is the invariant v1 violated systematically.
     function invariant_EachAccountHoldsItsOwnCollateral() public view {
         uint256 n = handler.actorsLength();
         for (uint256 i; i < n; ++i) {
@@ -176,20 +176,20 @@ contract InvariantTest is Test {
         }
     }
 
-    /// @notice El vault nunca custodia colateral ni stablecoin.
+    /// @notice The vault never custodies collateral or stablecoin.
     function invariant_VaultHoldsNothing() public view {
         assertEq(token.balanceOf(address(vault)), 0);
         assertEq(stable.balanceOf(address(vault)), 0);
     }
 
-    /// @notice Toda cuenta creada tiene delegatee: el voto nunca se pierde.
+    /// @notice Every created account has a delegatee: votes are never stranded.
     function invariant_NoVotingPowerIsStranded() public view {
         uint256 n = handler.actorsLength();
         for (uint256 i; i < n; ++i) {
             address account = vault.accountOf(handler.actors(i));
             if (account == address(0)) continue;
             if (token.balanceOf(account) == 0) continue;
-            assertTrue(DelegationAccount(account).currentDelegate() != address(0), "colateral sin delegar");
+            assertTrue(DelegationAccount(account).currentDelegate() != address(0), "collateral left undelegated");
         }
     }
 }

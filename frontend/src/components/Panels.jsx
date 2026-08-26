@@ -1,6 +1,6 @@
-// Paneles de la dApp. Todos los inputs pasan por parseUnits antes de tocar el
-// contrato: en la v1 el texto del input se enviaba tal cual, asi que escribir
-// "100" aprobaba 100 wei.
+// The dApp's panels. Every input goes through parseUnits before it reaches the
+// contract: in v1 the raw input text was sent as-is, so typing "100" approved
+// 100 wei.
 
 import { useState } from "react";
 import { parseUnits, isAddress } from "ethers";
@@ -32,36 +32,36 @@ export function PositionPanel({ data, loading }) {
 
   return (
     <section className="card">
-      <h2>Tu posicion {loading && <span className="spinner" />}</h2>
+      <h2>Your position {loading && <span className="spinner" />}</h2>
 
       <div className="grid">
-        <Stat label="Colateral depositado" value={`${fmt(data.collateral)} MGOV`} />
-        <Stat label="Valor del colateral" value={`$${fmt(data.collateralUsd, 2)}`} />
-        <Stat label="Deuda" value={`${fmt(data.debt)} gUSD`} />
-        <Stat label="LTV actual" value={`${ltv.toFixed(1)}%`} />
+        <Stat label="Collateral deposited" value={`${fmt(data.collateral)} MGOV`} />
+        <Stat label="Collateral value" value={`$${fmt(data.collateralUsd, 2)}`} />
+        <Stat label="Debt" value={`${fmt(data.debt)} gUSD`} />
+        <Stat label="Current LTV" value={`${ltv.toFixed(1)}%`} />
         <Stat
           label="Health factor"
           value={fmtHealth(data.health, data.debt)}
           className={healthClass(data.health, data.debt)}
         />
-        <Stat label="Precio del colateral" value={`$${fmt(data.price, 4)}`} />
+        <Stat label="Collateral price" value={`$${fmt(data.price, 4)}`} />
       </div>
 
       <div className="grid">
-        <Stat label="MGOV en tu wallet" value={fmt(data.walletCollateral)} />
-        <Stat label="gUSD en tu wallet" value={fmt(data.walletStable)} />
-        <Stat label="Todavia puedes emitir" value={`${fmt(data.maxMintable)} gUSD`} />
+        <Stat label="MGOV in your wallet" value={fmt(data.walletCollateral)} />
+        <Stat label="gUSD in your wallet" value={fmt(data.walletStable)} />
+        <Stat label="Still mintable" value={`${fmt(data.maxMintable)} gUSD`} />
       </div>
 
       {data.account && (
         <p className="muted">
-          Tu cuenta de delegacion:{" "}
+          Your delegation account:{" "}
           <a href={explorerAddress(data.account)} target="_blank" rel="noreferrer">
             {data.account}
           </a>
           <br />
-          Tu colateral vota a traves de:{" "}
-          <strong>{data.delegatee ?? "nadie"}</strong>
+          Your collateral votes through:{" "}
+          <strong>{data.delegatee ?? "nobody"}</strong>
         </p>
       )}
     </section>
@@ -89,14 +89,14 @@ export function DepositPanel({ data, actions, pending }) {
 
   return (
     <section className="card">
-      <h2>Depositar y emitir</h2>
+      <h2>Deposit and mint</h2>
       <p className="muted">
-        El colateral se guarda en tu propia cuenta de delegacion, no en el vault,
-        asi que sigue votando mientras esta depositado.
+        Your collateral is held in your own delegation account, not in the
+        vault, so it keeps voting while it is deposited.
       </p>
 
       <label>
-        Colateral a depositar (MGOV)
+        Collateral to deposit (MGOV)
         <input
           value={collateralText}
           onChange={(e) => setCollateralText(e.target.value)}
@@ -106,7 +106,7 @@ export function DepositPanel({ data, actions, pending }) {
       </label>
 
       <label>
-        gUSD a emitir (opcional)
+        gUSD to mint (optional)
         <input
           value={mintText}
           onChange={(e) => setMintText(e.target.value)}
@@ -116,13 +116,13 @@ export function DepositPanel({ data, actions, pending }) {
       </label>
 
       {collateralText && collateralAmount === null && (
-        <p className="error-inline">Cantidad de colateral invalida.</p>
+        <p className="error-inline">Invalid collateral amount.</p>
       )}
 
       <div className="row">
         {needsApproval ? (
           <button disabled={busy} onClick={actions.approveCollateral}>
-            {pending === "Aprobar colateral" ? "Aprobando..." : "1. Aprobar MGOV"}
+            {pending === "Approve collateral" ? "Approving..." : "1. Approve MGOV"}
           </button>
         ) : (
           <button
@@ -133,7 +133,7 @@ export function DepositPanel({ data, actions, pending }) {
                 : actions.deposit(collateralAmount)
             }
           >
-            {busy ? "Enviando..." : mintAmount ? "Depositar y emitir" : "Depositar"}
+            {busy ? "Sending..." : mintAmount ? "Deposit and mint" : "Deposit"}
           </button>
         )}
       </div>
@@ -152,13 +152,13 @@ export function RepayPanel({ data, actions, pending }) {
 
   return (
     <section className="card">
-      <h2>Repagar y retirar</h2>
+      <h2>Repay and withdraw</h2>
       <p className="muted">
-        La v1 no tenia salida: el colateral entraba y no volvia a salir nunca.
+        v1 had no exit at all: collateral went in and never came back out.
       </p>
 
       <label>
-        gUSD a repagar
+        gUSD to repay
         <input
           value={repayText}
           onChange={(e) => setRepayText(e.target.value)}
@@ -170,7 +170,7 @@ export function RepayPanel({ data, actions, pending }) {
       <div className="row">
         {needsApproval ? (
           <button disabled={busy} onClick={actions.approveStable}>
-            {pending === "Aprobar gUSD" ? "Aprobando..." : "Aprobar gUSD"}
+            {pending === "Approve gUSD" ? "Approving..." : "Approve gUSD"}
           </button>
         ) : (
           <>
@@ -178,21 +178,21 @@ export function RepayPanel({ data, actions, pending }) {
               disabled={busy || repayAmount === null}
               onClick={() => actions.repay(repayAmount)}
             >
-              Repagar
+              Repay
             </button>
             <button
               className="secondary"
               disabled={busy || data.debt === 0n}
               onClick={actions.repayAll}
             >
-              Repagar todo
+              Repay all
             </button>
           </>
         )}
       </div>
 
       <label>
-        Colateral a retirar (MGOV)
+        Collateral to withdraw (MGOV)
         <input
           value={withdrawText}
           onChange={(e) => setWithdrawText(e.target.value)}
@@ -206,7 +206,7 @@ export function RepayPanel({ data, actions, pending }) {
           disabled={busy || withdrawAmount === null}
           onClick={() => actions.withdraw(withdrawAmount)}
         >
-          Retirar
+          Withdraw
         </button>
       </div>
     </section>
@@ -220,14 +220,14 @@ export function DelegatePanel({ data, actions, pending, address }) {
 
   return (
     <section className="card">
-      <h2>Delegar poder de voto</h2>
+      <h2>Delegate voting power</h2>
       <p className="muted">
-        Esto es lo que el protocolo hace distinto: puedes mover tu voto sin
-        tocar tu deuda ni tu colateral.
+        This is what makes the protocol different: you can move your votes
+        without touching your debt or your collateral.
       </p>
 
       <label>
-        Direccion del delegatee
+        Delegatee address
         <input
           value={delegatee}
           onChange={(e) => setDelegatee(e.target.value)}
@@ -237,7 +237,7 @@ export function DelegatePanel({ data, actions, pending, address }) {
       </label>
 
       {delegatee && !valid && (
-        <p className="error-inline">Esa no es una direccion valida.</p>
+        <p className="error-inline">That is not a valid address.</p>
       )}
 
       <div className="row">
@@ -245,14 +245,14 @@ export function DelegatePanel({ data, actions, pending, address }) {
           disabled={busy || !valid || !data.account}
           onClick={() => actions.delegate(delegatee)}
         >
-          {pending === "Delegar voto" ? "Delegando..." : "Delegar"}
+          {pending === "Delegate votes" ? "Delegating..." : "Delegate"}
         </button>
         <button
           className="secondary"
           disabled={busy || !data.account}
           onClick={() => actions.delegate(address)}
         >
-          Recuperar mi voto
+          Take my votes back
         </button>
       </div>
     </section>
@@ -269,14 +269,14 @@ export function LiquidatePanel({ actions, pending }) {
 
   return (
     <section className="card">
-      <h2>Liquidar una posicion</h2>
+      <h2>Liquidate a position</h2>
       <p className="muted">
-        Si un health factor cae por debajo de 1, cualquiera puede cubrir parte
-        de esa deuda y llevarse el colateral con un 10% de descuento.
+        When a health factor drops below 1, anyone can cover part of that debt
+        and take the collateral at a 10% discount.
       </p>
 
       <label>
-        Direccion del deudor
+        Borrower address
         <input
           value={user}
           onChange={(e) => setUser(e.target.value)}
@@ -286,7 +286,7 @@ export function LiquidatePanel({ actions, pending }) {
       </label>
 
       <label>
-        gUSD a cubrir
+        gUSD to cover
         <input
           value={amountText}
           onChange={(e) => setAmountText(e.target.value)}
@@ -300,7 +300,7 @@ export function LiquidatePanel({ actions, pending }) {
           disabled={busy || !valid || amount === null}
           onClick={() => actions.liquidate(user, amount)}
         >
-          {pending === "Liquidar" ? "Liquidando..." : "Liquidar"}
+          {pending === "Liquidate" ? "Liquidating..." : "Liquidate"}
         </button>
       </div>
     </section>
@@ -311,10 +311,10 @@ export function FaucetPanel({ actions, pending }) {
   const busy = Boolean(pending);
   return (
     <section className="card">
-      <h2>Faucet de prueba</h2>
+      <h2>Test faucet</h2>
       <p className="muted">
-        El token de colateral es un mock de testnet: puedes acunarte los que
-        quieras para probar.
+        The collateral token is a testnet mock: mint yourself as many as you
+        need to try things out.
       </p>
       <div className="row">
         <button
@@ -322,7 +322,7 @@ export function FaucetPanel({ actions, pending }) {
           disabled={busy}
           onClick={() => actions.faucet(parseUnits("1000", DECIMALS))}
         >
-          Darme 1000 MGOV
+          Give me 1000 MGOV
         </button>
       </div>
     </section>

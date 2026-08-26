@@ -14,76 +14,76 @@ import {DelegationAccount} from "./DelegationAccount.sol";
 import {IAggregatorV3} from "./interfaces/IAggregatorV3.sol";
 
 /// @title CollateralVotingVault
-/// @notice CDP sobrecolateralizado que conserva el poder de voto del colateral.
-/// @dev Un solo contrato parametrizado por constructor sirve a cualquier token
-///      ERC20Votes con un feed de Chainlink. La v1 tenia una copia por cadena y
-///      las copias divergieron.
+/// @notice Overcollateralized CDP that preserves the collateral's voting power.
+/// @dev A single constructor-parameterized contract serves any ERC20Votes token
+///      with a Chainlink feed. v1 kept one copy per chain and the copies drifted
+///      apart.
 ///
-///      Convenciones de decimales, fijadas de una vez:
-///        - el colateral se asume de 18 decimales (se verifica en el constructor);
-///        - el precio se normaliza SIEMPRE a 18 decimales (`_price`);
-///        - la deuda y la stablecoin son de 18 decimales;
-///        - valor en USD (18 dec) = cantidad(18) * precio(18) / 1e18.
-///      Esa division final por 1e18 es la que faltaba en la v1 y hacia que se
-///      emitieran 1e18 veces mas stablecoins de las debidas.
+///      Decimal conventions, settled once and for all:
+///        - collateral is assumed to have 18 decimals (checked in the constructor);
+///        - the price is ALWAYS normalized to 18 decimals (`_price`);
+///        - debt and the stablecoin have 18 decimals;
+///        - USD value (18 dec) = amount(18) * price(18) / 1e18.
+///      That final division by 1e18 is what v1 was missing, which made it mint
+///      1e18 times more stablecoins than it should have.
 contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
     using SafeERC20 for IERC20;
 
     uint256 public constant BPS = 10_000;
     uint256 private constant WAD = 1e18;
 
-    /// @notice Cota dura del bono de liquidacion, para que el owner no pueda
-    ///         configurar un parametro que confisque posiciones sanas.
+    /// @notice Hard cap on the liquidation bonus, so the owner cannot configure
+    ///         a parameter that would confiscate healthy positions.
     uint256 public constant MAX_LIQUIDATION_BONUS_BPS = 2_000;
     uint256 public constant MIN_PRICE_AGE = 1 minutes;
     uint256 public constant MAX_PRICE_AGE = 7 days;
 
     /* ---------------------------------------------------------------- *
-     *                        configuracion inmutable                    *
+     *                       immutable configuration                     *
      * ---------------------------------------------------------------- */
 
-    /// @notice Token de gobernanza aceptado como colateral (debe ser ERC20Votes).
+    /// @notice Governance token accepted as collateral (must be ERC20Votes).
     IERC20 public immutable collateralToken;
-    /// @notice Feed de precio del colateral en USD.
+    /// @notice USD price feed for the collateral.
     IAggregatorV3 public immutable priceFeed;
-    /// @notice Stablecoin emitida contra este colateral.
+    /// @notice Stablecoin minted against this collateral.
     GovStablecoin public immutable stablecoin;
-    /// @notice Molde EIP-1167 del que se clonan las cuentas de delegacion.
+    /// @notice EIP-1167 template that delegation accounts are cloned from.
     address public immutable accountImplementation;
-    /// @dev Multiplicador que lleva el precio del feed a 18 decimales.
+    /// @dev Multiplier that brings the feed price up to 18 decimals.
     uint256 private immutable priceScale;
 
     /* ---------------------------------------------------------------- *
-     *                       parametros de riesgo                        *
+     *                          risk parameters                          *
      * ---------------------------------------------------------------- */
 
-    /// @notice LTV maximo al emitir o retirar. 5000 = 50%.
+    /// @notice Maximum LTV when minting or withdrawing. 5000 = 50%.
     uint256 public maxLtvBps;
-    /// @notice LTV a partir del cual la posicion es liquidable. 7500 = 75%.
+    /// @notice LTV at which a position becomes liquidatable. 7500 = 75%.
     uint256 public liquidationThresholdBps;
-    /// @notice Descuento que se lleva el liquidador. 1000 = 10%.
+    /// @notice Discount the liquidator receives. 1000 = 10%.
     uint256 public liquidationBonusBps;
-    /// @notice Fraccion maxima de la deuda cubrible en una sola liquidacion.
+    /// @notice Largest fraction of the debt coverable in a single liquidation.
     uint256 public closeFactorBps;
-    /// @notice Antiguedad maxima tolerada del precio del oraculo.
+    /// @notice Maximum tolerated age of the oracle price.
     uint256 public maxPriceAge;
 
     /* ---------------------------------------------------------------- *
-     *                              estado                               *
+     *                               state                               *
      * ---------------------------------------------------------------- */
 
-    /// @notice Colateral depositado por usuario.
+    /// @notice Collateral deposited per user.
     mapping(address user => uint256 amount) public collateralOf;
-    /// @notice Deuda viva por usuario, denominada en la stablecoin.
+    /// @notice Outstanding debt per user, denominated in the stablecoin.
     mapping(address user => uint256 amount) public debtOf;
-    /// @notice Cuenta de delegacion de cada usuario (cero si aun no tiene).
+    /// @notice Each user's delegation account (zero if they don't have one yet).
     mapping(address user => address account) public accountOf;
 
     uint256 public totalCollateral;
     uint256 public totalDebt;
 
     /* ---------------------------------------------------------------- *
-     *                              eventos                              *
+     *                               events                              *
      * ---------------------------------------------------------------- */
 
     event AccountOpened(address indexed user, address indexed account);
@@ -99,7 +99,7 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
     event MaxPriceAgeUpdated(uint256 maxPriceAge);
 
     /* ---------------------------------------------------------------- *
-     *                              errores                              *
+     *                               errors                              *
      * ---------------------------------------------------------------- */
 
     error ZeroAddress();
@@ -109,7 +109,7 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
     error NoAccount();
     error NoDebt();
     error InsufficientCollateral();
-    /// @param debt deuda resultante; @param maxDebtAllowed maximo permitido por el LTV
+    /// @param debt resulting debt; @param maxDebtAllowed ceiling implied by the LTV
     error ExceedsMaxLtv(uint256 debt, uint256 maxDebtAllowed);
     error PositionHealthy(uint256 healthFactor);
     error StalePrice(uint256 updatedAt, uint256 maxAge);
@@ -149,58 +149,60 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
     }
 
     /* ---------------------------------------------------------------- *
-     *                       operaciones de usuario                      *
+     *                          user operations                          *
      * ---------------------------------------------------------------- */
 
-    /// @notice Crea por adelantado la cuenta de delegacion de quien llama.
-    /// @dev Opcional: `deposit` la crea sola. Sirve para delegar antes de depositar.
+    /// @notice Creates the caller's delegation account ahead of time.
+    /// @dev Optional: `deposit` creates it on its own. Useful to set a delegate
+    ///      before depositing anything.
     function openAccount() external whenNotPaused returns (address) {
         return _accountFor(msg.sender);
     }
 
-    /// @notice Deposita colateral en la cuenta de delegacion propia.
+    /// @notice Deposits collateral into the caller's own delegation account.
     function deposit(uint256 amount) external nonReentrant whenNotPaused {
         _deposit(msg.sender, amount);
     }
 
-    /// @notice Emite stablecoin contra el colateral ya depositado.
+    /// @notice Mints stablecoin against already-deposited collateral.
     function mint(uint256 amount) external nonReentrant whenNotPaused {
         _mint(msg.sender, amount);
     }
 
-    /// @notice Deposita y emite en una sola transaccion.
-    /// @param mintAmount puede ser 0 para depositar sin endeudarse.
+    /// @notice Deposits and mints in a single transaction.
+    /// @param mintAmount may be 0 to deposit without taking on debt.
     function depositAndMint(uint256 collateralAmount, uint256 mintAmount) external nonReentrant whenNotPaused {
         _deposit(msg.sender, collateralAmount);
         if (mintAmount != 0) _mint(msg.sender, mintAmount);
     }
 
-    /// @notice Repaga deuda propia quemando stablecoin.
-    /// @dev Si `amount` supera la deuda se ajusta a la deuda; pasar
-    ///      `type(uint256).max` repaga todo sin necesidad de leerla antes.
+    /// @notice Repays your own debt by burning stablecoin.
+    /// @dev If `amount` exceeds the debt it is clamped to the debt; passing
+    ///      `type(uint256).max` repays everything without reading it first.
     function repay(uint256 amount) external nonReentrant returns (uint256 repaid) {
         return _repay(msg.sender, msg.sender, amount);
     }
 
-    /// @notice Repaga la deuda de otro usuario. Util para rescatar una posicion.
+    /// @notice Repays someone else's debt. Useful for rescuing a position.
     function repayFor(address user, uint256 amount) external nonReentrant returns (uint256 repaid) {
         return _repay(msg.sender, user, amount);
     }
 
-    /// @notice Retira colateral, siempre que la posicion siga bajo el LTV maximo.
+    /// @notice Withdraws collateral, as long as the position stays under max LTV.
     function withdraw(uint256 amount) external nonReentrant {
         _withdraw(msg.sender, amount);
     }
 
-    /// @notice Repaga y retira en una sola transaccion.
+    /// @notice Repays and withdraws in a single transaction.
     function repayAndWithdraw(uint256 repayAmount, uint256 withdrawAmount) external nonReentrant {
         if (repayAmount != 0) _repay(msg.sender, msg.sender, repayAmount);
         if (withdrawAmount != 0) _withdraw(msg.sender, withdrawAmount);
     }
 
-    /// @notice Redirige el poder de voto del colateral propio.
-    /// @dev Se puede llamar con deuda viva: delegar no mueve fondos ni afecta la
-    ///      salud de la posicion. Esa es justamente la propuesta del protocolo.
+    /// @notice Redirects the voting power of your own collateral.
+    /// @dev Callable with debt outstanding: delegating moves no funds and does
+    ///      not affect the position's health. That is precisely the point of
+    ///      this protocol.
     function delegate(address delegatee) external {
         address account = accountOf[msg.sender];
         if (account == address(0)) revert NoAccount();
@@ -208,9 +210,9 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
         emit DelegateChanged(msg.sender, delegatee);
     }
 
-    /// @notice Liquida una posicion cuyo health factor cayo por debajo de 1e18.
-    /// @param debtToCover deuda que el liquidador cubre; se recorta al close factor.
-    /// @return seized colateral entregado al liquidador, bono incluido.
+    /// @notice Liquidates a position whose health factor fell below 1e18.
+    /// @param debtToCover debt the liquidator covers; clamped to the close factor.
+    /// @return seized collateral handed to the liquidator, bonus included.
     function liquidate(address user, uint256 debtToCover) external nonReentrant whenNotPaused returns (uint256 seized) {
         uint256 price = _price();
         uint256 debt = debtOf[user];
@@ -223,13 +225,13 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
         if (debtToCover > maxRepay) debtToCover = maxRepay;
         if (debtToCover == 0) revert ZeroAmount();
 
-        // Colateral a incautar = valor de la deuda cubierta + bono, en tokens.
+        // Collateral to seize = value of the covered debt plus bonus, in tokens.
         seized = (debtToCover * (BPS + liquidationBonusBps) * WAD) / (BPS * price);
 
         uint256 collateral = collateralOf[user];
-        // Posicion insolvente: el liquidador se lleva todo lo que queda y el
-        // resto de la deuda se sigue debiendo. Sin este tope, `releaseCollateral`
-        // revertiria y la posicion mala quedaria sin poder cerrarse nunca.
+        // Insolvent position: the liquidator takes whatever is left and the rest
+        // of the debt stays owed. Without this cap `releaseCollateral` would
+        // revert and the bad position could never be closed.
         if (seized > collateral) seized = collateral;
 
         debtOf[user] = debt - debtToCover;
@@ -244,33 +246,33 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
     }
 
     /* ---------------------------------------------------------------- *
-     *                              vistas                               *
+     *                               views                               *
      * ---------------------------------------------------------------- */
 
-    /// @notice Precio del colateral en USD, normalizado a 18 decimales.
+    /// @notice Collateral price in USD, normalized to 18 decimals.
     function getPrice() external view returns (uint256) {
         return _price();
     }
 
-    /// @notice Valor en USD (18 dec) del colateral de un usuario.
+    /// @notice USD value (18 dec) of a user's collateral.
     function collateralValue(address user) external view returns (uint256) {
         return (collateralOf[user] * _price()) / WAD;
     }
 
-    /// @notice Deuda maxima que soporta hoy la posicion, segun el LTV maximo.
+    /// @notice Largest debt the position can carry today, per the max LTV.
     function maxDebt(address user) external view returns (uint256) {
         return _maxDebt(collateralOf[user], _price());
     }
 
-    /// @notice Stablecoin que el usuario todavia puede emitir. Cero si ya excede.
+    /// @notice Stablecoin the user can still mint. Zero if already over the limit.
     function maxMintable(address user) external view returns (uint256) {
         uint256 limit = _maxDebt(collateralOf[user], _price());
         uint256 debt = debtOf[user];
         return debt >= limit ? 0 : limit - debt;
     }
 
-    /// @notice Health factor con 18 decimales. Por debajo de 1e18 es liquidable.
-    /// @dev Sin deuda devuelve `type(uint256).max`.
+    /// @notice Health factor with 18 decimals. Below 1e18 the position is liquidatable.
+    /// @dev Returns `type(uint256).max` when there is no debt.
     function healthFactor(address user) external view returns (uint256) {
         return _healthFactor(collateralOf[user], debtOf[user], _price());
     }
@@ -281,14 +283,14 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
         return _healthFactor(collateralOf[user], debt, _price()) < WAD;
     }
 
-    /// @notice Delegatee actual del colateral de un usuario.
+    /// @notice Current delegatee of a user's collateral.
     function delegateOf(address user) external view returns (address) {
         address account = accountOf[user];
         if (account == address(0)) return address(0);
         return DelegationAccount(account).currentDelegate();
     }
 
-    /// @notice Posicion completa en una sola llamada, para el frontend.
+    /// @notice The whole position in a single call, for the frontend.
     function positionOf(address user)
         external
         view
@@ -310,13 +312,13 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
         delegatee = account == address(0) ? address(0) : DelegationAccount(account).currentDelegate();
     }
 
-    /// @notice Direccion que tendria la cuenta de un usuario, la tenga o no ya.
+    /// @notice Address a user's account would have, whether it exists yet or not.
     function predictAccountAddress(address user) external view returns (address) {
         return Clones.predictDeterministicAddress(accountImplementation, _salt(user), address(this));
     }
 
     /* ---------------------------------------------------------------- *
-     *                          administracion                           *
+     *                          administration                           *
      * ---------------------------------------------------------------- */
 
     function setRiskParameters(
@@ -332,9 +334,9 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
         _setMaxPriceAge(maxPriceAge_);
     }
 
-    /// @notice Congela deposito, emision y liquidacion.
-    /// @dev `repay` y `withdraw` siguen abiertos a proposito: pausar no debe
-    ///      poder secuestrar el colateral de nadie.
+    /// @notice Freezes deposits, minting and liquidations.
+    /// @dev `repay` and `withdraw` stay open on purpose: pausing must never be
+    ///      able to hold anyone's collateral hostage.
     function pause() external onlyOwner {
         _pause();
     }
@@ -344,7 +346,7 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
     }
 
     /* ---------------------------------------------------------------- *
-     *                             internos                              *
+     *                             internals                             *
      * ---------------------------------------------------------------- */
 
     function _deposit(address user, uint256 amount) private {
@@ -355,8 +357,8 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
         collateralOf[user] += amount;
         totalCollateral += amount;
 
-        // El colateral viaja a la cuenta del usuario, NO al vault: es lo que
-        // permite que conserve su poder de voto.
+        // Collateral travels to the user's own account, NOT to the vault. That
+        // is what lets them keep their voting power.
         collateralToken.safeTransferFrom(user, account, amount);
 
         emit Deposited(user, account, amount);
@@ -372,8 +374,8 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
         debtOf[user] = newDebt;
         totalDebt += amount;
 
-        // La stablecoin va al usuario. En la v1 iba a la cuenta de delegacion,
-        // que no tenia forma de moverla: quedaba atrapada para siempre.
+        // The stablecoin goes to the user. In v1 it went to the delegation
+        // account, which had no way to move it: it was stuck there forever.
         stablecoin.mint(user, amount);
 
         emit Minted(user, amount, newDebt);
@@ -416,7 +418,7 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
         emit Withdrawn(user, amount);
     }
 
-    /// @dev Devuelve la cuenta del usuario, creandola con CREATE2 si no existe.
+    /// @dev Returns the user's account, creating it with CREATE2 if absent.
     function _accountFor(address user) private returns (address account) {
         account = accountOf[user];
         if (account != address(0)) return account;
@@ -432,27 +434,27 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
         return bytes32(uint256(uint160(user)));
     }
 
-    /// @dev Precio validado y normalizado a 18 decimales.
+    /// @dev Validated price, normalized to 18 decimals.
     function _price() private view returns (uint256) {
         (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = priceFeed.latestRoundData();
 
         if (answer <= 0) revert InvalidPrice(answer);
-        // `block.timestamp` es seguro aqui: la ventana es de una hora y un
-        // validador solo puede desviarla unos segundos. No hay nada que ganar
-        // moviendola dentro de ese margen.
+        // `block.timestamp` is safe here: the window is an hour and a validator
+        // can only shift it by seconds. There is nothing to gain by moving it
+        // within that margin.
         // forge-lint: disable-next-line(block-timestamp)
         if (updatedAt == 0 || block.timestamp - updatedAt > maxPriceAge) revert StalePrice(updatedAt, maxPriceAge);
-        // Respuesta arrastrada de una ronda anterior: el feed esta atascado.
+        // Answer carried over from an earlier round: the feed is stuck.
         if (answeredInRound < roundId) revert StalePrice(updatedAt, maxPriceAge);
 
-        // El cast a uint256 es seguro porque `answer <= 0` ya revirtio arriba.
+        // The cast to uint256 is safe because `answer <= 0` already reverted above.
         // forge-lint: disable-next-line(unsafe-typecast)
         return uint256(answer) * priceScale;
     }
 
-    /// @dev Deuda maxima permitida por el LTV. La division por WAD es la
-    ///      correccion de escala que faltaba en la v1.
-    ///      Se multiplica todo antes de dividir para no perder precision.
+    /// @dev Largest debt allowed by the LTV. The division by WAD is the scaling
+    ///      fix that v1 was missing. Everything is multiplied before dividing to
+    ///      avoid losing precision.
     function _maxDebt(uint256 collateral, uint256 price) private view returns (uint256) {
         return (collateral * price * maxLtvBps) / (WAD * BPS);
     }
@@ -469,8 +471,8 @@ contract CollateralVotingVault is Ownable2Step, ReentrancyGuard, Pausable {
         uint256 liquidationBonusBps_,
         uint256 closeFactorBps_
     ) private {
-        // El LTV de emision debe dejar margen antes del umbral de liquidacion,
-        // o una posicion naceria liquidable.
+        // The minting LTV must leave room before the liquidation threshold, or a
+        // position would be born liquidatable.
         if (maxLtvBps_ == 0 || maxLtvBps_ > liquidationThresholdBps_) revert InvalidParameters();
         if (liquidationThresholdBps_ >= BPS) revert InvalidParameters();
         if (liquidationBonusBps_ > MAX_LIQUIDATION_BONUS_BPS) revert InvalidParameters();

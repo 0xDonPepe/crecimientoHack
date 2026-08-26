@@ -2,7 +2,7 @@
 pragma solidity 0.8.28;
 
 /// @title IAggregatorV3
-/// @notice Subconjunto de la interfaz de Chainlink que consume el protocolo.
+/// @notice The subset of Chainlink's interface that this protocol consumes.
 interface IAggregatorV3 {
     function decimals() external view returns (uint8);
 

@@ -6,14 +6,14 @@ import {CollateralVotingVault} from "../src/CollateralVotingVault.sol";
 import {MockGovernanceToken} from "../src/mocks/MockGovernanceToken.sol";
 import {MockPriceFeed} from "../src/mocks/MockPriceFeed.sol";
 
-/// @notice Validacion del oraculo. La v1 leia `latestRoundData` y usaba la
-///         respuesta tal cual: sin comprobar antiguedad, signo ni ronda.
+/// @notice Oracle validation. v1 read `latestRoundData` and used the answer
+///         as-is: no age check, no sign check, no round check.
 contract OracleTest is BaseTest {
     function test_RevertsOnStalePrice() public {
         vm.prank(alice);
         vault.deposit(100e18);
 
-        // El feed deja de actualizarse durante mas de una hora.
+        // The feed stops updating for more than an hour.
         vm.warp(block.timestamp + MAX_PRICE_AGE + 1);
 
         vm.expectRevert(
@@ -26,7 +26,7 @@ contract OracleTest is BaseTest {
 
     function test_AcceptsPriceJustWithinMaxAge() public {
         vm.warp(block.timestamp + MAX_PRICE_AGE);
-        assertEq(vault.getPrice(), 0.6e18, "en el limite exacto todavia es valido");
+        assertEq(vault.getPrice(), 0.6e18, "exactly at the limit it is still valid");
     }
 
     function test_RevertsOnNegativePrice() public {
@@ -43,8 +43,8 @@ contract OracleTest is BaseTest {
         vault.getPrice();
     }
 
-    /// @dev La v1 hacia `uint(answer)` sobre un int negativo: en lugar de
-    ///      revertir, obtenia un numero astronomico y emitia contra el.
+    /// @dev v1 did `uint(answer)` on a negative int: instead of reverting it got
+    ///      an astronomical number and minted against it.
     function test_NegativePriceCannotBeCastIntoHugeCollateralValue() public {
         vm.prank(alice);
         vault.deposit(100e18);
@@ -57,7 +57,7 @@ contract OracleTest is BaseTest {
     }
 
     function test_RevertsOnStuckRound() public {
-        // La ronda avanza pero la respuesta se queda en la anterior.
+        // The round advances but the answer stays behind.
         feed.setStuckRound();
 
         vm.expectRevert();
@@ -80,8 +80,8 @@ contract OracleTest is BaseTest {
         vault.liquidate(alice, 15e18);
     }
 
-    /// @notice Repagar debe funcionar aunque el oraculo este caido: si no,
-    ///         un feed roto dejaria a todo el mundo sin poder salir.
+    /// @notice Repaying must work even with the oracle down: otherwise a broken
+    ///         feed would trap everyone inside their position.
     function test_RepayWorksWithStalePrice() public {
         vm.startPrank(alice);
         vault.depositAndMint(100e18, 30e18);
@@ -93,10 +93,10 @@ contract OracleTest is BaseTest {
         vm.prank(alice);
         vault.repay(30e18);
 
-        assertEq(vault.debtOf(alice), 0, "siempre se puede repagar");
+        assertEq(vault.debtOf(alice), 0, "you can always repay");
     }
 
-    /// @notice Y retirar sin deuda tampoco debe depender del oraculo.
+    /// @notice And withdrawing with no debt must not depend on the oracle either.
     function test_WithdrawWithoutDebtWorksWithStalePrice() public {
         vm.prank(alice);
         vault.deposit(100e18);
@@ -109,10 +109,10 @@ contract OracleTest is BaseTest {
         assertEq(token.balanceOf(alice), INITIAL_BALANCE);
     }
 
-    /* --------------------- normalizacion de decimales --------------------- */
+    /* ---------------------- decimal normalization ---------------------- */
 
     function test_PriceNormalizedFrom8Decimals() public view {
-        assertEq(vault.getPrice(), 0.6e18, "8 decimales escalados a 18");
+        assertEq(vault.getPrice(), 0.6e18, "8 decimals scaled up to 18");
     }
 
     function test_PriceNormalizedFrom18Decimals() public {
@@ -132,7 +132,7 @@ contract OracleTest is BaseTest {
             owner
         );
 
-        assertEq(v.getPrice(), 1.25e18, "un feed de 18 decimales no se reescala");
+        assertEq(v.getPrice(), 1.25e18, "an 18-decimal feed is not rescaled");
     }
 
     function test_RejectsFeedWithMoreThan18Decimals() public {
@@ -154,9 +154,9 @@ contract OracleTest is BaseTest {
         );
     }
 
-    /* ------------------------------- fuzz ------------------------------- */
+    /* ------------------------------ fuzz ------------------------------ */
 
-    /// @notice El maximo emitible debe seguir al precio de forma monotona.
+    /// @notice The mintable ceiling must track the price monotonically.
     function testFuzz_MaxMintableTracksPrice(uint64 rawPrice) public {
         vm.assume(rawPrice > 0);
         feed.setAnswer(int256(uint256(rawPrice)));

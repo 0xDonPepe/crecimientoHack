@@ -4,10 +4,10 @@ pragma solidity 0.8.28;
 import {BaseTest} from "./Base.t.sol";
 import {CollateralVotingVault} from "../src/CollateralVotingVault.sol";
 
-/// @notice Liquidaciones. La v1 no tenia ninguna: una caida de precio dejaba a
-///         la stablecoin sin respaldo y nadie podia hacer nada al respecto.
+/// @notice Liquidations. v1 had none: a price drop left the stablecoin unbacked
+///         and nobody could do anything about it.
 contract LiquidationTest is BaseTest {
-    /// @dev Posicion estandar: 100 tokens a 0.60 USD, 30 gUSD de deuda (LTV 50%).
+    /// @dev Standard position: 100 tokens at 0.60 USD, 30 gUSD of debt (50% LTV).
     function _openAlicePosition() internal {
         vm.prank(alice);
         vault.depositAndMint(100e18, 30e18);
@@ -31,7 +31,7 @@ contract LiquidationTest is BaseTest {
         _openAlicePosition();
         _fundStablecoin(liquidator, 15e18);
 
-        // A 0.35 USD: 35 USD de colateral * 0.75 = 26.25, contra 30 de deuda.
+        // At 0.35 USD: 35 USD of collateral * 0.75 = 26.25, against 30 of debt.
         feed.setAnswer(0.35e8);
 
         assertEq(vault.healthFactor(alice), 0.875e18);
@@ -48,18 +48,19 @@ contract LiquidationTest is BaseTest {
         vm.prank(liquidator);
         uint256 seized = vault.liquidate(alice, 15e18);
 
-        // 15 USD cubiertos * 1.10 de bono / 0.35 por token.
+        // 15 USD covered * 1.10 bonus / 0.35 per token.
         uint256 expected = (15e18 * 11_000 * WAD) / (BPS * 0.35e18);
-        assertEq(seized, expected, "colateral incautado con bono del 10%");
-        assertEq(token.balanceOf(liquidator) - tokensBefore, seized, "el liquidador recibe los tokens");
+        assertEq(seized, expected, "collateral seized with the 10% bonus");
+        assertEq(token.balanceOf(liquidator) - tokensBefore, seized, "the liquidator receives the tokens");
 
-        // El bono es real: se lleva mas valor del que pago.
+        // The bonus is real: they take out more value than they paid in.
         uint256 seizedUsd = (seized * 0.35e18) / WAD;
-        assertGt(seizedUsd, 15e18, "el liquidador sale ganando");
-        // Redondeo a la baja de 1 wei: la division entera favorece al protocolo,
-        // nunca al liquidador. Se comprueba el sentido del redondeo, no solo la magnitud.
-        assertApproxEqAbs(seizedUsd, 16.5e18, 1, "aproximadamente el 10% de bono");
-        assertLe(seizedUsd, 16.5e18, "el redondeo nunca puede favorecer al liquidador");
+        assertGt(seizedUsd, 15e18, "the liquidator comes out ahead");
+        // One wei of round-down: integer division favours the protocol, never
+        // the liquidator. The direction of the rounding is asserted, not just
+        // its magnitude.
+        assertApproxEqAbs(seizedUsd, 16.5e18, 1, "roughly a 10% bonus");
+        assertLe(seizedUsd, 16.5e18, "rounding can never favour the liquidator");
     }
 
     function test_LiquidateBurnsStablecoinAndReducesDebt() public {
@@ -72,10 +73,10 @@ contract LiquidationTest is BaseTest {
         vm.prank(liquidator);
         vault.liquidate(alice, 15e18);
 
-        assertEq(vault.debtOf(alice), 15e18, "la deuda baja en lo cubierto");
-        assertEq(stable.balanceOf(liquidator), 0, "el liquidador gasto su stablecoin");
-        assertEq(stable.totalSupply(), supplyBefore - 15e18, "la oferta se contrae");
-        assertEq(vault.totalDebt(), stable.totalSupply(), "contabilidad y oferta cuadran");
+        assertEq(vault.debtOf(alice), 15e18, "debt falls by what was covered");
+        assertEq(stable.balanceOf(liquidator), 0, "the liquidator spent their stablecoin");
+        assertEq(stable.totalSupply(), supplyBefore - 15e18, "supply contracts");
+        assertEq(vault.totalDebt(), stable.totalSupply(), "accounting and supply agree");
     }
 
     function test_LiquidationImprovesHealthFactor() public {
@@ -88,7 +89,7 @@ contract LiquidationTest is BaseTest {
         vm.prank(liquidator);
         vault.liquidate(alice, 15e18);
 
-        assertGt(vault.healthFactor(alice), hfBefore, "liquidar debe sanear la posicion");
+        assertGt(vault.healthFactor(alice), hfBefore, "liquidating should heal the position");
     }
 
     function test_CloseFactorCapsSingleLiquidation() public {
@@ -96,27 +97,27 @@ contract LiquidationTest is BaseTest {
         _fundStablecoin(liquidator, 30e18);
         feed.setAnswer(0.35e8);
 
-        // Intenta cubrir toda la deuda; el close factor lo recorta a la mitad.
+        // Tries to cover the whole debt; the close factor halves it.
         vm.prank(liquidator);
         vault.liquidate(alice, 30e18);
 
-        assertEq(vault.debtOf(alice), 15e18, "solo se pudo cubrir el 50%");
-        assertEq(stable.balanceOf(liquidator), 15e18, "el resto de su stablecoin sigue intacto");
+        assertEq(vault.debtOf(alice), 15e18, "only 50% could be covered");
+        assertEq(stable.balanceOf(liquidator), 15e18, "the rest of their stablecoin is untouched");
     }
 
     function test_InsolventPositionSeizesAllRemainingCollateral() public {
         _openAlicePosition();
         _fundStablecoin(liquidator, 15e18);
 
-        // Caida brutal: 100 tokens a 0.10 USD = 10 USD contra 30 de deuda.
+        // Brutal crash: 100 tokens at 0.10 USD = 10 USD against 30 of debt.
         feed.setAnswer(0.1e8);
 
         vm.prank(liquidator);
         uint256 seized = vault.liquidate(alice, 15e18);
 
-        assertEq(seized, 100e18, "se incauta todo el colateral disponible");
+        assertEq(seized, 100e18, "all available collateral is seized");
         assertEq(vault.collateralOf(alice), 0);
-        assertEq(vault.debtOf(alice), 15e18, "queda deuda mala reconocida, no un revert");
+        assertEq(vault.debtOf(alice), 15e18, "bad debt is recognized, not reverted");
         assertEq(token.balanceOf(vault.accountOf(alice)), 0);
     }
 
@@ -143,7 +144,7 @@ contract LiquidationTest is BaseTest {
         vault.liquidate(alice, 15e18);
     }
 
-    /// @notice El colateral liquidado deja de aportar poder de voto al deudor.
+    /// @notice Seized collateral stops contributing voting power to the borrower.
     function test_LiquidationMovesVotingPowerAway() public {
         vm.prank(alice);
         token.delegate(alice);
@@ -156,26 +157,28 @@ contract LiquidationTest is BaseTest {
         vm.prank(liquidator);
         uint256 seized = vault.liquidate(alice, 15e18);
 
-        assertEq(token.getVotes(alice), votesBefore - seized, "pierde el voto del colateral incautado");
+        assertEq(token.getVotes(alice), votesBefore - seized, "loses the votes of the seized collateral");
     }
 
-    /* ------------------------ regimen de rescate ------------------------ */
+    /* ------------------------- salvage regime ------------------------- */
 
-    /// @notice Frontera exacta a partir de la cual liquidar deja de sanear.
-    /// @dev Derivacion. Con V = valor del colateral, D = deuda, T = umbral de
-    ///      liquidacion y b = bono, liquidar `d` deja V' = V - d(1+b) y D' = D - d.
+    /// @notice The exact boundary past which liquidating stops healing.
+    /// @dev Derivation. With V = collateral value, D = debt, T = liquidation
+    ///      threshold and b = bonus, covering `d` leaves V' = V - d(1+b) and
+    ///      D' = D - d.
     ///
     ///          HF' > HF  <=>  (V - d(1+b)) / (D - d)  >  V / D
     ///                    <=>  DV - Dd(1+b) > VD - Vd
     ///                    <=>  V > D(1+b)
     ///
-    ///      Es decir, liquidar mejora el health factor solo si el colateral aun
-    ///      cubre la deuda mas el bono. En health factor eso es HF > T(1+b),
-    ///      aqui 0.75 * 1.10 = 0.825. Por debajo, cada liquidacion extrae mas
-    ///      valor del que cancela y la posicion se hunde mas: es deuda mala y lo
-    ///      unico que queda es dejar que los liquidadores la vacien. Aave y
-    ///      Compound se comportan igual; no es un defecto de este contrato, pero
-    ///      si un limite que hay que conocer al elegir el bono.
+    ///      In other words, liquidating improves the health factor only while
+    ///      the collateral still covers the debt plus the bonus. In health
+    ///      factor terms that is HF > T(1+b), here 0.75 * 1.10 = 0.825. Below
+    ///      that, every liquidation extracts more value than it cancels and the
+    ///      position sinks further: it is bad debt, and all that is left is to
+    ///      let liquidators drain it. Aave and Compound behave the same way; it
+    ///      is not a flaw in this contract, but it is a limit worth knowing when
+    ///      choosing the bonus.
     function SALVAGE_THRESHOLD() public pure returns (uint256) {
         return (LIQ_THRESHOLD * (BPS + LIQ_BONUS) * WAD) / (BPS * BPS); // 0.825e18
     }
@@ -184,7 +187,7 @@ contract LiquidationTest is BaseTest {
         _openAlicePosition();
         _fundStablecoin(liquidator, 15e18);
 
-        // 0.35 da HF 0.875, por encima de 0.825.
+        // 0.35 gives HF 0.875, above 0.825.
         feed.setAnswer(0.35e8);
         assertGt(vault.healthFactor(alice), SALVAGE_THRESHOLD());
 
@@ -192,14 +195,14 @@ contract LiquidationTest is BaseTest {
         vm.prank(liquidator);
         vault.liquidate(alice, 15e18);
 
-        assertGt(vault.healthFactor(alice), hfBefore, "por encima de la frontera, liquidar sanea");
+        assertGt(vault.healthFactor(alice), hfBefore, "above the boundary, liquidating heals");
     }
 
     function test_BelowSalvageThresholdPositionIsBeyondSaving() public {
         _openAlicePosition();
         _fundStablecoin(liquidator, 15e18);
 
-        // 0.30 da HF 0.75, por debajo de 0.825.
+        // 0.30 gives HF 0.75, below 0.825.
         feed.setAnswer(0.3e8);
         assertLt(vault.healthFactor(alice), SALVAGE_THRESHOLD());
 
@@ -207,16 +210,16 @@ contract LiquidationTest is BaseTest {
         vm.prank(liquidator);
         vault.liquidate(alice, 15e18);
 
-        // Documentado a proposito: aqui el health factor EMPEORA.
-        assertLt(vault.healthFactor(alice), hfBefore, "por debajo de la frontera ya no hay rescate");
-        assertLt(vault.debtOf(alice), 30e18, "pero la deuda mala si se reduce");
+        // Documented on purpose: here the health factor gets WORSE.
+        assertLt(vault.healthFactor(alice), hfBefore, "below the boundary there is no rescue");
+        assertLt(vault.debtOf(alice), 30e18, "but the bad debt does shrink");
     }
 
-    /* ------------------------------- fuzz ------------------------------- */
+    /* ------------------------------ fuzz ------------------------------ */
 
-    /// @notice Propiedades que deben cumplirse en CUALQUIER liquidacion.
+    /// @notice Properties that must hold for ANY liquidation.
     function testFuzz_LiquidationInvariants(uint256 dropBps, uint256 debtToCover) public {
-        dropBps = bound(dropBps, 4_100, 9_000); // caida del 41% al 90%
+        dropBps = bound(dropBps, 4_100, 9_000); // a 41% to 90% crash
         debtToCover = bound(debtToCover, 1, 30e18);
 
         _openAlicePosition();
@@ -238,22 +241,22 @@ contract LiquidationTest is BaseTest {
 
         uint256 covered = debtBefore - vault.debtOf(alice);
 
-        assertLe(vault.debtOf(alice), debtBefore, "la deuda nunca sube");
-        assertLe(vault.collateralOf(alice), collateralBefore, "el colateral nunca sube");
-        assertLe(covered, (debtBefore * CLOSE_FACTOR) / BPS, "se respeta el close factor");
-        assertEq(stable.totalSupply(), supplyBefore - covered, "se quema exactamente lo cubierto");
-        assertEq(vault.totalDebt(), stable.totalSupply(), "deuda contable y oferta cuadran");
+        assertLe(vault.debtOf(alice), debtBefore, "debt never rises");
+        assertLe(vault.collateralOf(alice), collateralBefore, "collateral never rises");
+        assertLe(covered, (debtBefore * CLOSE_FACTOR) / BPS, "the close factor is respected");
+        assertEq(stable.totalSupply(), supplyBefore - covered, "exactly what was covered gets burned");
+        assertEq(vault.totalDebt(), stable.totalSupply(), "book debt and supply agree");
 
-        // El liquidador nunca puede llevarse mas que deuda cubierta + bono.
+        // The liquidator can never take more than covered debt plus bonus.
         uint256 seizedUsd = (seized * vault.getPrice()) / WAD;
-        assertLe(seizedUsd, (covered * (BPS + LIQ_BONUS)) / BPS, "el bono esta acotado");
+        assertLe(seizedUsd, (covered * (BPS + LIQ_BONUS)) / BPS, "the bonus is bounded");
 
-        // Y por encima de la frontera de rescate, liquidar siempre sanea.
-        // La holgura de 1e9 (1e-9 relativo) absorbe el polvo de la division
-        // entera: cubrir 1 wei de deuda puede mover el HF 1 wei a la baja sin
-        // que eso sea una regresion. Cualquier fallo real es de orden 1e17.
+        // And above the salvage boundary, liquidating always heals.
+        // The 1e9 slack (1e-9 relative) absorbs integer-division dust: covering
+        // 1 wei of debt can move the HF down by 1 wei without that being a
+        // regression. Any real failure is on the order of 1e17.
         if (hfBefore > SALVAGE_THRESHOLD() && vault.collateralOf(alice) > 0 && vault.debtOf(alice) > 0) {
-            assertGe(vault.healthFactor(alice) + 1e9, hfBefore, "sobre la frontera, el HF mejora");
+            assertGe(vault.healthFactor(alice) + 1e9, hfBefore, "above the boundary the HF improves");
         }
     }
 }

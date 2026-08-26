@@ -5,11 +5,12 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import {ERC20Permit} from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 
 /// @title GovStablecoin
-/// @notice Stablecoin sobrecolateralizada que emite y quema un unico vault.
-/// @dev El vault es `immutable` y se fija en el constructor. No hay owner, ni
-///      funcion de emision arbitraria: la unica fuente de oferta es el CDP.
+/// @notice Overcollateralized stablecoin minted and burned by a single vault.
+/// @dev The vault is `immutable` and fixed in the constructor. There is no
+///      owner and no arbitrary mint function: the CDP is the only source of
+///      supply.
 contract GovStablecoin is ERC20, ERC20Permit {
-    /// @notice Unico contrato autorizado a emitir y quemar.
+    /// @notice The only contract allowed to mint and burn.
     address public immutable vault;
 
     error OnlyVault();
@@ -25,14 +26,14 @@ contract GovStablecoin is ERC20, ERC20Permit {
         vault = vault_;
     }
 
-    /// @notice Emite `amount` a `to`. Solo el vault, contra colateral depositado.
+    /// @notice Mints `amount` to `to`. Vault only, against deposited collateral.
     function mint(address to, uint256 amount) external onlyVault {
         _mint(to, amount);
     }
 
-    /// @notice Quema `amount` de `from`. Solo el vault, al repagar o liquidar.
-    /// @dev No requiere allowance porque el vault solo la invoca sobre quien
-    ///      firmo la transaccion (el pagador o el liquidador).
+    /// @notice Burns `amount` from `from`. Vault only, on repayment or liquidation.
+    /// @dev Needs no allowance because the vault only ever calls it on whoever
+    ///      signed the transaction (the payer or the liquidator).
     function burn(address from, uint256 amount) external onlyVault {
         _burn(from, amount);
     }

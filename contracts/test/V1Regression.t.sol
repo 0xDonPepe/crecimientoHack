@@ -7,14 +7,15 @@ import {DelegationAccount} from "../src/DelegationAccount.sol";
 import {GovStablecoin} from "../src/GovStablecoin.sol";
 
 /// @title V1Regression
-/// @notice Un test por cada defecto encontrado en la version del hackathon.
-/// @dev Cada `test_` documenta que hacia la v1 y comprueba que ya no ocurre.
-///      Sirven de red de seguridad y, sobre todo, de bitacora de la revision.
+/// @notice One test per defect found in the hackathon version.
+/// @dev Each `test_` documents what v1 did and proves it no longer happens.
+///      They act as a safety net and, above all, as a written record of the
+///      review.
 contract V1RegressionTest is BaseTest {
     /* ---------------------------------------------------------------- *
-     * BUG 1 - El colateral se quedaba en el vault, no en la cuenta de
-     * delegacion, asi que la delegacion delegaba un balance de cero y el
-     * poder de voto del colateral simplemente desaparecia.
+     * BUG 1 - Collateral stayed in the vault instead of the delegation
+     * account, so delegation delegated a zero balance and the collateral's
+     * voting power simply vanished.
      * ---------------------------------------------------------------- */
 
     function test_Bug1_CollateralLandsInDelegationAccountNotVault() public {
@@ -23,12 +24,12 @@ contract V1RegressionTest is BaseTest {
 
         address account = vault.accountOf(alice);
 
-        assertEq(token.balanceOf(account), 100e18, "el colateral debe vivir en la cuenta del usuario");
-        assertEq(token.balanceOf(address(vault)), 0, "el vault no debe custodiar colateral");
+        assertEq(token.balanceOf(account), 100e18, "collateral must live in the user's account");
+        assertEq(token.balanceOf(address(vault)), 0, "the vault must not custody collateral");
     }
 
     function test_Bug1_DepositingDoesNotCostVotingPower() public {
-        // Alice se auto-delega, como haria cualquier holder que vota.
+        // Alice self-delegates, as any holder who votes would.
         vm.prank(alice);
         token.delegate(alice);
 
@@ -38,23 +39,24 @@ contract V1RegressionTest is BaseTest {
         vm.prank(alice);
         vault.depositAndMint(400e18, 100e18);
 
-        // Esta es la tesis entera del protocolo: deposita, se endeuda, y su
-        // poder de voto no se movio ni un wei. En la v1 caia a 600e18.
-        assertEq(token.getVotes(alice), votesBefore, "depositar no debe costar poder de voto");
-        assertEq(token.balanceOf(alice), INITIAL_BALANCE - 400e18, "y aun asi los tokens salieron de su wallet");
+        // This is the entire thesis of the protocol: she deposits, takes on debt,
+        // and her voting power has not moved by a single wei. In v1 it dropped
+        // to 600e18.
+        assertEq(token.getVotes(alice), votesBefore, "depositing must not cost voting power");
+        assertEq(token.balanceOf(alice), INITIAL_BALANCE - 400e18, "and the tokens did leave her wallet");
     }
 
     function test_Bug1_DelegationAccountSelfDelegatesToOwner() public {
         vm.prank(alice);
         vault.deposit(100e18);
 
-        assertEq(vault.delegateOf(alice), alice, "la cuenta debe delegar al dueno de entrada");
+        assertEq(vault.delegateOf(alice), alice, "the account must delegate to its owner up front");
     }
 
     /* ---------------------------------------------------------------- *
-     * BUG 2 - La stablecoin se emitia a la cuenta de delegacion, que no
-     * tenia ninguna funcion para moverla. Quedaba atrapada para siempre y
-     * el usuario nunca la veia.
+     * BUG 2 - The stablecoin was minted to the delegation account, which
+     * had no function to move it. It was stuck there forever and the user
+     * never saw it.
      * ---------------------------------------------------------------- */
 
     function test_Bug2_StablecoinIsMintedToTheUser() public {
@@ -63,15 +65,15 @@ contract V1RegressionTest is BaseTest {
 
         address account = vault.accountOf(alice);
 
-        assertEq(stable.balanceOf(alice), 20e18, "la stablecoin es del usuario");
-        assertEq(stable.balanceOf(account), 0, "la cuenta de delegacion no debe retenerla");
+        assertEq(stable.balanceOf(alice), 20e18, "the stablecoin belongs to the user");
+        assertEq(stable.balanceOf(account), 0, "the delegation account must not hold it");
     }
 
     function test_Bug2_UserCanActuallySpendTheStablecoin() public {
         vm.prank(alice);
         vault.depositAndMint(100e18, 20e18);
 
-        // Lo que la v1 hacia imposible: usarla en DeFi.
+        // What v1 made impossible: using it in DeFi.
         vm.prank(alice);
         stable.transfer(bob, 20e18);
 
@@ -79,25 +81,25 @@ contract V1RegressionTest is BaseTest {
     }
 
     /* ---------------------------------------------------------------- *
-     * BUG 3 - Error de escala de 1e18. La v1 multiplicaba precio (18 dec)
-     * por cantidad (18 dec) y emitia el resultado de 36 decimales como si
-     * fuese de 18, emitiendo 1e18 veces de mas.
+     * BUG 3 - A 1e18 scaling error. v1 multiplied price (18 dec) by amount
+     * (18 dec) and minted the 36-decimal result as if it had 18, minting
+     * 1e18 times too much.
      * ---------------------------------------------------------------- */
 
     function test_Bug3_MintAmountHasCorrectScale() public {
-        // 100 tokens a 0.60 USD = 60 USD de colateral, 50% LTV = 30 gUSD.
+        // 100 tokens at 0.60 USD = 60 USD of collateral, 50% LTV = 30 gUSD.
         vm.prank(alice);
         vault.deposit(100e18);
 
-        assertEq(vault.collateralValue(alice), 60e18, "valor del colateral en USD con 18 decimales");
-        assertEq(vault.maxMintable(alice), 30e18, "maximo emitible correcto");
+        assertEq(vault.collateralValue(alice), 60e18, "collateral USD value with 18 decimals");
+        assertEq(vault.maxMintable(alice), 30e18, "correct mintable ceiling");
 
         vm.prank(alice);
         vault.mint(30e18);
 
         assertEq(stable.balanceOf(alice), 30e18);
-        // La v1 habria emitido 30e36. Se comprueba explicitamente.
-        assertLt(stable.balanceOf(alice), 30e36, "la v1 emitia 1e18 veces de mas");
+        // v1 would have minted 30e36. Checked explicitly.
+        assertLt(stable.balanceOf(alice), 30e36, "v1 minted 1e18 times too much");
     }
 
     function test_Bug3_CannotMintMoreThanLtvAllows() public {
@@ -110,9 +112,8 @@ contract V1RegressionTest is BaseTest {
     }
 
     /* ---------------------------------------------------------------- *
-     * BUG 4 - `createUserDelegationAccount` era `public` y aceptaba
-     * cualquier direccion, asi que cualquiera podia sobrescribir la cuenta
-     * de delegacion de otro usuario.
+     * BUG 4 - `createUserDelegationAccount` was `public` and accepted any
+     * address, so anyone could overwrite another user's delegation account.
      * ---------------------------------------------------------------- */
 
     function test_Bug4_AccountCreationIsNotHijackable() public {
@@ -120,13 +121,13 @@ contract V1RegressionTest is BaseTest {
         vault.deposit(100e18);
         address aliceAccount = vault.accountOf(alice);
 
-        // Bob no tiene forma de crear ni reemplazar la cuenta de alice: la unica
-        // via es `openAccount`, que siempre opera sobre msg.sender.
+        // Bob has no way to create or replace alice's account: the only entry
+        // point is `openAccount`, which always operates on msg.sender.
         vm.prank(bob);
         address bobAccount = vault.openAccount();
 
-        assertTrue(bobAccount != aliceAccount, "cada usuario tiene su propia cuenta");
-        assertEq(vault.accountOf(alice), aliceAccount, "la cuenta de alice no cambio");
+        assertTrue(bobAccount != aliceAccount, "each user gets their own account");
+        assertEq(vault.accountOf(alice), aliceAccount, "alice's account did not change");
     }
 
     function test_Bug4_AccountCannotBeReinitialized() public {
@@ -163,8 +164,8 @@ contract V1RegressionTest is BaseTest {
     }
 
     /* ---------------------------------------------------------------- *
-     * BUG 5 - `userLockedTokens[msg.sender] = amount` sobrescribia en vez
-     * de acumular, asi que el segundo deposito borraba el primero.
+     * BUG 5 - `userLockedTokens[msg.sender] = amount` overwrote instead of
+     * accumulating, so the second deposit erased the first.
      * ---------------------------------------------------------------- */
 
     function test_Bug5_MultipleDepositsAccumulate() public {
@@ -174,13 +175,13 @@ contract V1RegressionTest is BaseTest {
         vault.deposit(25e18);
         vm.stopPrank();
 
-        assertEq(vault.collateralOf(alice), 175e18, "los depositos se suman");
+        assertEq(vault.collateralOf(alice), 175e18, "deposits add up");
         assertEq(token.balanceOf(vault.accountOf(alice)), 175e18);
     }
 
     /* ---------------------------------------------------------------- *
-     * BUG 6 - No existia salida. `returnGovernanceTokens` estaba escrita
-     * pero nadie la llamaba nunca: el colateral entraba y no salia.
+     * BUG 6 - There was no way out. `returnGovernanceTokens` was written
+     * but never called by anyone: collateral went in and never came back.
      * ---------------------------------------------------------------- */
 
     function test_Bug6_FullRoundTripReturnsAllCollateral() public {
@@ -192,15 +193,15 @@ contract V1RegressionTest is BaseTest {
         vault.repayAndWithdraw(30e18, 100e18);
         vm.stopPrank();
 
-        assertEq(token.balanceOf(alice), balanceBefore, "recupera todo su colateral");
-        assertEq(vault.debtOf(alice), 0, "sin deuda");
-        assertEq(vault.collateralOf(alice), 0, "sin colateral bloqueado");
-        assertEq(stable.totalSupply(), 0, "la stablecoin emitida se quemo");
+        assertEq(token.balanceOf(alice), balanceBefore, "gets all her collateral back");
+        assertEq(vault.debtOf(alice), 0, "no debt");
+        assertEq(vault.collateralOf(alice), 0, "no collateral locked");
+        assertEq(stable.totalSupply(), 0, "the minted stablecoin was burned");
     }
 
     /* ---------------------------------------------------------------- *
-     * BUG 7 - `depositAndMintStablecoin` declaraba `returns(uint)` y nunca
-     * retornaba: siempre devolvia 0 en silencio.
+     * BUG 7 - `depositAndMintStablecoin` declared `returns(uint)` and never
+     * returned: it silently handed back 0 every time.
      * ---------------------------------------------------------------- */
 
     function test_Bug7_ReturnValuesAreReal() public {
@@ -211,11 +212,11 @@ contract V1RegressionTest is BaseTest {
         uint256 repaid = vault.repay(10e18);
         vm.stopPrank();
 
-        assertEq(repaid, 10e18, "repay devuelve lo efectivamente repagado");
+        assertEq(repaid, 10e18, "repay returns what was actually repaid");
     }
 
     /* ---------------------------------------------------------------- *
-     * BUG 8 - Cero eventos en todo el sistema: nada indexable.
+     * BUG 8 - Zero events in the whole system: nothing was indexable.
      * ---------------------------------------------------------------- */
 
     function test_Bug8_OperationsEmitEvents() public {
@@ -233,8 +234,8 @@ contract V1RegressionTest is BaseTest {
     }
 
     /* ---------------------------------------------------------------- *
-     * BUG 9 - La stablecoin de la v1 no tenia `burn`, asi que aunque se
-     * hubiera escrito el repago no habria habido forma de cerrarlo.
+     * BUG 9 - v1's stablecoin had no `burn`, so even if repayment had been
+     * written there would have been no way to settle it.
      * ---------------------------------------------------------------- */
 
     function test_Bug9_StablecoinMintAndBurnAreVaultOnly() public {
@@ -251,18 +252,18 @@ contract V1RegressionTest is BaseTest {
     }
 
     /* ---------------------------------------------------------------- *
-     * BUG 10 - El precio del vault de zkSync estaba hardcodeado en el
-     * codigo. Ahora el precio viene siempre del feed inyectado.
+     * BUG 10 - The zkSync vault had its price hardcoded in the source.
+     * The price now always comes from the injected feed.
      * ---------------------------------------------------------------- */
 
     function test_Bug10_PriceComesFromTheFeed() public {
         assertEq(vault.getPrice(), 0.6e18);
 
         feed.setAnswer(1.2e8);
-        assertEq(vault.getPrice(), 1.2e18, "el precio sigue al feed, no esta fijado");
+        assertEq(vault.getPrice(), 1.2e18, "the price tracks the feed, it is not pinned");
 
         vm.prank(alice);
         vault.deposit(100e18);
-        assertEq(vault.maxMintable(alice), 60e18, "y mueve el poder de emision");
+        assertEq(vault.maxMintable(alice), 60e18, "and it moves the minting capacity");
     }
 }

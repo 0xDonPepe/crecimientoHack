@@ -1,6 +1,7 @@
-// Conexion de wallet, con deteccion y cambio de red.
-// La v1 construia un Web3Provider en el cuerpo de cada componente (lo que
-// revienta si no hay wallet instalada) y nunca comprobaba en que red estabas.
+// Wallet connection, with network detection and switching.
+//
+// v1 built a Web3Provider in the body of every component (which blows up when
+// no wallet is installed) and never checked which network you were on.
 
 import { useCallback, useEffect, useState } from "react";
 import { BrowserProvider } from "ethers";
@@ -38,7 +39,7 @@ export function useWallet() {
 
   const connect = useCallback(async () => {
     if (!window.ethereum) {
-      setError("No se detecto ninguna wallet. Instala MetaMask.");
+      setError("No wallet detected. Install MetaMask.");
       return;
     }
     setConnecting(true);
@@ -48,7 +49,7 @@ export function useWallet() {
       await provider.send("eth_requestAccounts", []);
       await refresh();
     } catch (e) {
-      setError(e.shortMessage ?? e.message ?? "No se pudo conectar.");
+      setError(e.shortMessage ?? e.message ?? "Could not connect.");
     } finally {
       setConnecting(false);
     }
@@ -63,7 +64,7 @@ export function useWallet() {
         params: [{ chainId: hexChainId }],
       });
     } catch (e) {
-      // 4902 = la red no esta dada de alta en la wallet.
+      // 4902 = the network is not registered in the wallet.
       if (e.code === 4902) {
         await window.ethereum.request({
           method: "wallet_addEthereumChain",
@@ -89,8 +90,8 @@ export function useWallet() {
     refresh();
 
     const onAccountsChanged = () => refresh();
-    // Cambiar de red invalida providers y contratos cacheados; recargar es
-    // lo que recomienda MetaMask y evita estados a medias.
+    // Switching networks invalidates cached providers and contracts; reloading
+    // is what MetaMask recommends and avoids half-updated state.
     const onChainChanged = () => window.location.reload();
 
     window.ethereum.on("accountsChanged", onAccountsChanged);

@@ -1,9 +1,8 @@
-// Estado del protocolo para el usuario conectado.
+// Protocol state for the connected user.
 //
-// La v1 llamaba a getData() en el cuerpo del render, asi que cada render
-// disparaba llamadas RPC que provocaban otro render: un bucle infinito. Aqui
-// la carga vive en un useEffect con dependencias explicitas y se refresca a
-// mano tras cada transaccion.
+// v1 called getData() in the render body, so every render fired RPC calls that
+// triggered another render: an infinite loop. Here loading lives in a useEffect
+// with explicit dependencies and is refreshed by hand after each transaction.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Contract, MaxUint256, formatUnits } from "ethers";
@@ -67,7 +66,7 @@ export function useVault(signer, address) {
       const stableAddress = await vault.stablecoin();
       const stable = new Contract(stableAddress, govStablecoinAbi, signer);
 
-      // positionOf agrupa lo que antes eran seis llamadas sueltas.
+      // positionOf collapses what used to be six separate calls.
       const [position, walletCollateral, walletStable, allowance, stableAllowance] =
         await Promise.all([
           vault.positionOf(address),
@@ -77,8 +76,8 @@ export function useVault(signer, address) {
           stable.allowance(address, VAULT_ADDRESS),
         ]);
 
-      // Estas dos dependen del oraculo y pueden revertir si el feed esta
-      // rancio. La posicion basica debe seguir viendose igualmente.
+      // These two depend on the oracle and can revert if the feed is stale. The
+      // basic position must stay visible regardless.
       let maxMintable = 0n;
       let price = 0n;
       try {
@@ -88,7 +87,7 @@ export function useVault(signer, address) {
         ]);
       } catch {
         setNotice(
-          "El oraculo de precio no responde; deposito y emision estaran bloqueados hasta que se actualice.",
+          "The price oracle is not responding; deposits and minting are blocked until it updates.",
         );
       }
 
@@ -118,8 +117,8 @@ export function useVault(signer, address) {
     load();
   }, [load]);
 
-  /// Envuelve una transaccion: estado de pendiente, espera de confirmacion,
-  /// error legible y recarga. La v1 hacia window.location.reload() a ciegas.
+  /// Wraps a transaction: pending state, confirmation wait, readable error and
+  /// reload. v1 called window.location.reload() blindly.
   const run = useCallback(
     async (label, fn) => {
       setPending(label);
@@ -128,7 +127,7 @@ export function useVault(signer, address) {
       try {
         const tx = await fn();
         await tx.wait();
-        setNotice(`${label}: confirmado.`);
+        setNotice(`${label}: confirmed.`);
         await load();
         return true;
       } catch (e) {
@@ -144,7 +143,7 @@ export function useVault(signer, address) {
   const actions = useMemo(
     () => ({
       approveCollateral: () =>
-        run("Aprobar colateral", () =>
+        run("Approve collateral", () =>
           collateral.approve(VAULT_ADDRESS, MaxUint256),
         ),
       approveStable: async () => {
@@ -153,23 +152,23 @@ export function useVault(signer, address) {
           govStablecoinAbi,
           signer,
         );
-        return run("Aprobar gUSD", () =>
+        return run("Approve gUSD", () =>
           stable.approve(VAULT_ADDRESS, MaxUint256),
         );
       },
-      deposit: (amount) => run("Depositar", () => vault.deposit(amount)),
-      mint: (amount) => run("Emitir gUSD", () => vault.mint(amount)),
+      deposit: (amount) => run("Deposit", () => vault.deposit(amount)),
+      mint: (amount) => run("Mint gUSD", () => vault.mint(amount)),
       depositAndMint: (c, m) =>
-        run("Depositar y emitir", () => vault.depositAndMint(c, m)),
-      repay: (amount) => run("Repagar", () => vault.repay(amount)),
-      repayAll: () => run("Repagar todo", () => vault.repay(MaxUint256)),
-      withdraw: (amount) => run("Retirar", () => vault.withdraw(amount)),
-      delegate: (to) => run("Delegar voto", () => vault.delegate(to)),
-      openAccount: () => run("Abrir cuenta", () => vault.openAccount()),
+        run("Deposit and mint", () => vault.depositAndMint(c, m)),
+      repay: (amount) => run("Repay", () => vault.repay(amount)),
+      repayAll: () => run("Repay all", () => vault.repay(MaxUint256)),
+      withdraw: (amount) => run("Withdraw", () => vault.withdraw(amount)),
+      delegate: (to) => run("Delegate votes", () => vault.delegate(to)),
+      openAccount: () => run("Open account", () => vault.openAccount()),
       liquidate: (user, amount) =>
-        run("Liquidar", () => vault.liquidate(user, amount)),
+        run("Liquidate", () => vault.liquidate(user, amount)),
       faucet: (amount) =>
-        run("Pedir tokens de prueba", () => collateral.mint(address, amount)),
+        run("Request test tokens", () => collateral.mint(address, amount)),
     }),
     [run, vault, collateral, signer, address],
   );
@@ -177,12 +176,12 @@ export function useVault(signer, address) {
   return { data, loading, pending, error, notice, actions, reload: load, setError };
 }
 
-/// Formatea un valor de 18 decimales. La v1 mostraba los balances en wei
-/// crudo, asi que un saldo de 100 tokens aparecia como 100000000000000000000.
+/// Formats an 18-decimal value. v1 showed balances in raw wei, so a balance of
+/// 100 tokens appeared as 100000000000000000000.
 export function fmt(value, digits = 4) {
   if (value === undefined || value === null) return "-";
   try {
-    return Number(formatUnits(value, DECIMALS)).toLocaleString("es-MX", {
+    return Number(formatUnits(value, DECIMALS)).toLocaleString("en-US", {
       maximumFractionDigits: digits,
     });
   } catch {
@@ -190,7 +189,7 @@ export function fmt(value, digits = 4) {
   }
 }
 
-/// El health factor sin deuda es type(uint256).max; no tiene sentido pintarlo.
+/// With no debt the health factor is type(uint256).max; printing that is useless.
 export function fmtHealth(health, debt) {
   if (!debt || debt === 0n) return "∞";
   return fmt(health, 2);

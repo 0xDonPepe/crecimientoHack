@@ -7,13 +7,13 @@ import {CollateralVotingVault} from "../src/CollateralVotingVault.sol";
 import {MockGovernanceToken} from "../src/mocks/MockGovernanceToken.sol";
 import {MockPriceFeed} from "../src/mocks/MockPriceFeed.sol";
 
-/// @notice Despliega un vault contra un token y un feed que ya existen.
-/// @dev Todo se lee del entorno, nada esta cableado en el codigo. La v1 tenia
-///      las direcciones escritas dentro de los contratos.
+/// @notice Deploys a vault against an existing token and price feed.
+/// @dev Everything is read from the environment; nothing is hardcoded. v1 had
+///      the addresses written inside the contracts themselves.
 ///
 ///      forge script script/Deploy.s.sol:Deploy --rpc-url arbitrum --broadcast --verify
 contract Deploy is Script {
-    /// @dev Agrupada en un struct para no agotar la pila de la EVM.
+    /// @dev Grouped into a struct to avoid running out of EVM stack slots.
     struct Config {
         address collateral;
         address feed;
@@ -67,9 +67,9 @@ contract Deploy is Script {
     }
 }
 
-/// @notice Despliegue completo de testnet: token mock, feed mock y vault.
-/// @dev Para redes donde no hay un feed de Chainlink del token de gobernanza.
-///      En la v1 esto se resolvia cableando el precio dentro del contrato.
+/// @notice Full testnet deployment: mock token, mock feed and vault.
+/// @dev For networks with no Chainlink feed for the governance token. In v1 this
+///      was solved by hardcoding the price inside the contract.
 ///
 ///      forge script script/Deploy.s.sol:DeployTestnet --rpc-url arbitrum_sepolia --broadcast
 contract DeployTestnet is Script {
@@ -85,7 +85,7 @@ contract DeployTestnet is Script {
             address(token), address(feed), "Governance Stablecoin", "gUSD", 5_000, 7_500, 1_000, 5_000, 1 hours, owner
         );
 
-        // Reparto inicial para poder probar la dApp de inmediato.
+        // Initial allocation so the dApp can be exercised right away.
         token.mint(msg.sender, 1_000_000e18);
 
         vm.stopBroadcast();

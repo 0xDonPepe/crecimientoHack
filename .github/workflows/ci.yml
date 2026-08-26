@@ -7,7 +7,7 @@ on:
 
 jobs:
   contracts:
-    name: Contratos
+    name: Contracts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -16,7 +16,7 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
 
-      - name: Formato
+      - name: Format
         working-directory: contracts
         run: forge fmt --check
 

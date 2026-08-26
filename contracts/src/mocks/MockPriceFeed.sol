@@ -4,8 +4,8 @@ pragma solidity 0.8.28;
 import {IAggregatorV3} from "../interfaces/IAggregatorV3.sol";
 
 /// @title MockPriceFeed
-/// @notice Feed de Chainlink controlable, para probar caidas de precio,
-///         precios negativos y rondas atascadas.
+/// @notice Controllable Chainlink feed, for testing price crashes, negative
+///         prices and stuck rounds.
 contract MockPriceFeed is IAggregatorV3 {
     uint8 private immutable _decimals;
     string private _description;
@@ -40,7 +40,7 @@ contract MockPriceFeed is IAggregatorV3 {
         return (_roundId, _answer, _updatedAt, _updatedAt, _answeredInRound);
     }
 
-    /// @notice Publica un precio nuevo en una ronda nueva.
+    /// @notice Publishes a new price in a new round.
     function setAnswer(int256 answer) external {
         _answer = answer;
         _updatedAt = block.timestamp;
@@ -48,12 +48,12 @@ contract MockPriceFeed is IAggregatorV3 {
         _answeredInRound = _roundId;
     }
 
-    /// @notice Fuerza la marca de tiempo, para simular un feed rancio.
+    /// @notice Forces the timestamp, to simulate a stale feed.
     function setUpdatedAt(uint256 updatedAt) external {
         _updatedAt = updatedAt;
     }
 
-    /// @notice Simula una ronda abierta que arrastra la respuesta anterior.
+    /// @notice Simulates an open round carrying over the previous answer.
     function setStuckRound() external {
         _roundId += 1;
     }
